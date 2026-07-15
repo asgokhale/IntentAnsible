@@ -1,0 +1,4 @@
+---
+# Role body = your playbook_k8s_start_cluster.yml verbatim (paste it here).
+- name: "(placeholder) k8s_start"
+  ansible.builtin.debug: { msg: "paste your k8s start tasks here" }

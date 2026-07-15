@@ -1,0 +1,21 @@
+# EXAMPLE spec (note-11 scenario): 4 plain VMs, no clusters/masters/k8s.
+# Demonstrates that "no k8s" is a data change, not new playbooks.
+# Not your real config -- that lives in mydeployments/ (copied from specs/examples/).
+setup: vm
+platform: { name: chameleon, cloud: CH-819381, zone: nova, image: CC-Ubuntu24.04 }
+topology: { clusters: 1 }
+node_groups:
+  - name: vms
+    count: 4
+    roles: [base]
+    networks: [CH-819381-net1]
+    flavor: someflavor
+    key: S26_CLUSTER
+    security_groups: [default, ENABLE_SSH]
+    name_pattern: "PLAIN-{role_i}"
+    shard_by: none
+pipelines:
+  plain_vms:
+    - { step: node_provision, target: local, when_setup: vm }
+    - { step: apt_install,    target: "role:base" }
+active_pipeline: plain_vms

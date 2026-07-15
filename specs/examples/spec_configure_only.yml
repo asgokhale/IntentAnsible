@@ -1,0 +1,14 @@
+setup: vm
+platform: { name: chameleon, cloud: CH-819381, zone: nova, image: CC-Ubuntu24.04 }
+apt_packages: [curl, vim]   # so apt_install has data in this demo spec
+topology: { clusters: 2 }
+node_groups:
+  - { name: cp,      count: 2, roles: [k8s_control_plane], flavor: f1, key: k, networks: [n1], security_groups: [default], name_pattern: "C{cluster}-M{role_i}" }
+  - { name: workers, count: 4, roles: [k8s_worker],        flavor: f2, key: k, networks: [n1], security_groups: [default], name_pattern: "C{cluster}-W{role_i}" }
+pipelines:
+  configure:
+    # ===== CONFIGURATION =====
+    - { step: apt_install, target: "role:k8s_control_plane,k8s_worker" }
+    - { step: firewall,    target: "role:k8s_control_plane" }
+    - { step: k8s_start,   target: "role:k8s_control_plane" }
+active_pipeline: configure

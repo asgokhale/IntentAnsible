@@ -1,0 +1,42 @@
+---
+# ENVIRONMENT SPEC: Chameleon project CH-822922 (FILL IN your real values)
+# Differs from 819381 on purpose: 2 clusters, 2 masters/cluster, fewer workers.
+setup: vm
+
+platform:
+  name: chameleon
+  cloud: CH-822922                 # <-- this project's cloud id
+  zone: nova
+  image: CC-Ubuntu24.04
+  vm_creation_limit: 10
+
+deploy_conn:
+  remote_user: cc
+  bastion:
+    host: REPLACE-822922-BASTION-IP    # <-- this project's bastion public IP
+    user: cc
+    key: ~/.ssh/REPLACE_822922_BASTION.pem
+  default_node_key: ~/.ssh/REPLACE_822922_CLUSTER.pem
+  strict_host_key_checking: false
+
+topology:
+  clusters: 2
+
+node_groups:
+  - name: cp
+    count: 4                        # 2 clusters x 2 masters = HA control plane
+    roles: [k8s_control_plane]
+    flavor: REPLACE-CP-LEASE-ID
+    key: REPLACE_822922_KEYPAIR
+    networks: [CH-822922-net1, CH-822922-net2]
+    security_groups: [default, ENABLE_SSH, ENABLE_ICMP, ENABLE_HTTP_HTTPS]
+    name_pattern: "P2-C{cluster}-M{role_i}"
+
+  - name: workers
+    count: 12
+    roles: [k8s_worker]
+    flavor: REPLACE-WORKER-LEASE-ID
+    key: REPLACE_822922_KEYPAIR
+    networks: [CH-822922-net1, CH-822922-net2]
+    security_groups: [default, ENABLE_SSH, ENABLE_ICMP, ENABLE_HTTP_HTTPS]
+    name_pattern: "P2-C{cluster}-W{role_i}"

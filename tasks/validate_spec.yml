@@ -1,0 +1,24 @@
+---
+# Fail fast with a clear message if the spec is malformed. Generic: it checks
+# the node model, not hard-coded masters/workers.
+- name: "Require core spec keys"
+  ansible.builtin.assert:
+    that:
+      - node_groups is defined and node_groups | length > 0
+      - pipelines is defined
+      - active_pipeline in pipelines
+      - topology.clusters | int >= 1
+    fail_msg: "Spec incomplete (need node_groups, pipelines, active_pipeline, topology.clusters)"
+    quiet: true
+
+- name: "Each node group is well-formed"
+  ansible.builtin.assert:
+    that:
+      - item.name is defined
+      - item.roles is defined and item.roles | length > 0
+      # cloud groups need count+name_pattern; bare-metal groups need static_hosts
+      - (item.count is defined and item.name_pattern is defined) or (item.static_hosts is defined and item.static_hosts | length > 0)
+    fail_msg: "node group '{{ item.name | default('?') }}' needs either (count + name_pattern) or static_hosts"
+    quiet: true
+  loop: "{{ node_groups }}"
+  loop_control: { label: "{{ item.name | default('?') }}" }

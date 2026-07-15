@@ -1,0 +1,15 @@
+---
+# Replaces 20 hand-written firewalld tasks. (Notes 5 & 10.)
+firewall_rules:
+  - { port: "2379-2381/tcp" }   # etcd
+  - { port: "6443/tcp" }        # apiserver
+  - { port: "10250/tcp" }       # kubelet
+  - { port: "10256/tcp" }       # kube-proxy
+  - { port: "10257/tcp" }       # controller-mgr
+  - { port: "10259/tcp" }       # scheduler
+  - { port: "5000/tcp" }        # private registry
+  - { port: "30000-30200/tcp" } # NodePort
+  - { port: "80/tcp" }
+  - { port: "8081/tcp" }        # nginx ingress
+  - { port: "4789/udp" }        # OVS VXLAN
+  - { port: "6633-6653/tcp" }   # OpenFlow

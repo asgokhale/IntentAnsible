@@ -1,0 +1,9 @@
+---
+# Build in-memory inventory from node_groups. Outer loop = groups; the inner
+# expansion lives in _expand_group.yml so the index math stays readable.
+- name: "Expand every node group into role-tagged hosts"
+  ansible.builtin.include_tasks: _expand_group.yml
+  loop: "{{ node_groups }}"
+  loop_control:
+    loop_var: ng
+    label: "{{ ng.name }} (x{{ ng.count }})"

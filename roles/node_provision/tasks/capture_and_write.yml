@@ -1,0 +1,27 @@
+---
+# IP capture + consolidated inventory write. Split out from main.yml so it can
+# be tested without the cloud call, and reused if you ever re-capture IPs.
+- name: "Capture private IPs into a fact map"
+  ansible.builtin.set_fact:
+    node_ip_map: >-
+      {{ node_ip_map | default({}) | combine({
+           res.item: (res.server.addresses[ hostvars[res.item].node_network ]
+                       | selectattr('OS-EXT-IPS:type','equalto','fixed')
+                       | map(attribute='addr') | first)
+         }) }}
+  loop: "{{ _created.results }}"
+  loop_control:
+    loop_var: res
+    label: "{{ res.item }}"
+
+- name: "Ensure inventory output dir exists"
+  ansible.builtin.file:
+    path: "{{ inventory_out_dir }}"
+    state: directory
+    mode: "0755"
+
+- name: "Write consolidated inventory to disk"
+  ansible.builtin.template:
+    src: inventory.yml.j2
+    dest: "{{ inventory_out_dir }}/hosts.yml"
+    mode: "0644"

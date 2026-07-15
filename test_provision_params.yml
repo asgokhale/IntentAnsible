@@ -1,0 +1,43 @@
+---
+# Verify every node resolves a COMPLETE + CORRECT provisioning param set,
+# and that flavor-per-role works: control plane != worker flavor.
+# (Can't reach real OpenStack here; this tests the data plumbing, where bugs
+#  actually live. The openstack.cloud.server call itself is standard.)
+- name: "TEST - provisioning params per node"
+  hosts: LocalNodes
+  gather_facts: no
+  vars:
+    platform:
+      cloud: CH-819381
+      zone: nova
+      image: CC-Ubuntu24.04
+  tasks:
+    - import_tasks: tasks/validate_spec.yml
+    - import_tasks: tasks/build_inventory.yml
+
+    - name: "every provisioned node has a full param set (no undefined)"
+      ansible.builtin.assert:
+        that:
+          - hostvars[item].node_flavor is defined and hostvars[item].node_flavor | length > 0
+          - hostvars[item].node_key is defined
+          - hostvars[item].node_image is defined
+          - hostvars[item].node_security_groups is defined and hostvars[item].node_security_groups | length > 0
+          - hostvars[item].node_network is defined
+        fail_msg: "node {{ item }} is missing provisioning params"
+        quiet: true
+      loop: "{{ groups['all_provisioned'] | sort }}"
+      loop_control: { label: "{{ item }}" }
+
+    - name: "flavor-per-role: workers got the LARGE flavor, masters did not"
+      ansible.builtin.assert:
+        that:
+          - hostvars[groups['k8s_worker'][0]].node_flavor == 'LARGE-FLAVOR-LEASE-ID'
+          - hostvars[groups['k8s_control_plane'][0]].node_flavor != 'LARGE-FLAVOR-LEASE-ID'
+        fail_msg: "flavor-per-role not wired correctly"
+        success_msg: "OK: workers=LARGE, masters=their own flavor"
+
+    - name: "show the exact openstack.cloud.server params for one worker + one master"
+      ansible.builtin.debug:
+        msg:
+          - "WORKER {{ groups['k8s_worker'][0] }}: flavor={{ hostvars[groups['k8s_worker'][0]].node_flavor }} net={{ hostvars[groups['k8s_worker'][0]].node_network }} key={{ hostvars[groups['k8s_worker'][0]].node_key }}"
+          - "MASTER {{ groups['k8s_control_plane'][0] }}: flavor={{ hostvars[groups['k8s_control_plane'][0]].node_flavor }} net={{ hostvars[groups['k8s_control_plane'][0]].node_network }}"

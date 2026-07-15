@@ -1,0 +1,83 @@
+---
+# Provision all nodes in ONE ordering phase, wait for them, then return.
+# Called once per distinct provision_order value, lowest first, so the bastion
+# (order 0) is fully up and reachable before private nodes (order 1) start.
+
+- name: "[phase {{ _phase }}] select this phase's hosts"
+  ansible.builtin.set_fact:
+    _phase_hosts: >-
+      {{ groups['all_provisioned']
+         | map('extract', hostvars)
+         | selectattr('node_provision_order', 'equalto', _phase | int)
+         | map(attribute='inventory_hostname') | list }}
+
+- name: "[phase {{ _phase }}] create VMs"
+  openstack.cloud.server:
+    cloud: "{{ platform.cloud }}"
+    state: present
+    availability_zone: "{{ platform.zone }}"
+    name: "{{ item }}"
+    image: "{{ hostvars[item].node_image }}"
+    flavor: "{{ hostvars[item].node_flavor }}"
+    key_name: "{{ hostvars[item].node_key }}"
+    security_groups: "{{ hostvars[item].node_security_groups }}"
+    network: "{{ hostvars[item].node_network }}"
+    # A node either gets a specific floating IP (the bastion) OR stays private.
+    # These params are mutually exclusive, so each node passes exactly ONE:
+    #   - has node_floating_ip  -> floating_ips: [that ip], auto_ip omitted
+    #   - no node_floating_ip   -> auto_ip: false,          floating_ips omitted
+    floating_ips: "{{ [hostvars[item].node_floating_ip] if (hostvars[item].node_floating_ip | length > 0) else omit }}"
+    auto_ip: "{{ omit if (hostvars[item].node_floating_ip | length > 0) else false }}"
+    boot_from_volume: false
+    reuse_ips: true
+    wait: yes
+  register: _phase_created
+  loop: "{{ _phase_hosts }}"
+  loop_control:
+    label: "{{ item }} [{{ hostvars[item].node_flavor }}]{{ ' +FIP ' ~ hostvars[item].node_floating_ip if hostvars[item].node_floating_ip | length > 0 else '' }}"
+
+# Merge this phase's creation results into a run-wide list for IP capture later.
+- name: "[phase {{ _phase }}] accumulate created results"
+  ansible.builtin.set_fact:
+    _created_all: "{{ (_created_all | default([])) + _phase_created.results }}"
+
+# Before we can wait_for_connection, each host needs a reachable ansible_host.
+# It isn't set at add_host time (capture runs later), so set it NOW from the
+# creation result: bastion -> its floating IP; private nodes -> fixed IP on
+# their network. This is what makes wait_for_connection actually reach them
+# instead of hanging on an unresolvable hostname.
+- name: "[phase {{ _phase }}] set connection address on this phase's hosts"
+  ansible.builtin.set_fact:
+    ansible_host: >-
+      {{ hostvars[res.item].node_floating_ip
+         if (hostvars[res.item].node_floating_ip | length > 0)
+         else (res.server.addresses[hostvars[res.item].node_network]
+               | selectattr('OS-EXT-IPS:type','equalto','fixed')
+               | map(attribute='addr') | first) }}
+    ansible_ssh_private_key_file: "{{ hostvars[res.item].node_ssh_key_file }}"
+    ansible_user: "{{ deploy_conn.remote_user }}"
+    # bastion (has its own floating IP) connects directly; private nodes jump
+    # through the bastion. shk = strict-host-key flags.
+    ansible_ssh_common_args: >-
+      {{ _shk if (hostvars[res.item].node_floating_ip | length > 0)
+         else _shk ~ ' -o ProxyCommand="ssh -W %h:%p -i ' ~ deploy_conn.bastion.key ~ ' ' ~ _shk ~ ' ' ~ deploy_conn.bastion.user ~ '@' ~ deploy_conn.bastion.host ~ '"' }}
+  vars:
+    # -F /dev/null: ignore ~/.ssh/config so it can't inject a competing
+    # ProxyJump/ProxyCommand (e.g. a 192.168.x.* wildcard) that conflicts with
+    # the proxy we set here. Ansible stays fully self-contained; your ssh config
+    # remains yours for interactive use.
+    _shk: "-F /dev/null -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+  delegate_to: "{{ res.item }}"
+  delegate_facts: true
+  loop: "{{ _phase_created.results }}"
+  loop_control:
+    loop_var: res
+    label: "{{ res.item }}"
+
+- name: "[phase {{ _phase }}] wait for connectivity before next phase"
+  ansible.builtin.wait_for_connection:
+    timeout: 300
+  delegate_to: "{{ item }}"
+  loop: "{{ _phase_hosts }}"
+  loop_control:
+    label: "{{ item }}"

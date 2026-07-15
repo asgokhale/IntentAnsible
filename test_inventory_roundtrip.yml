@@ -1,0 +1,54 @@
+---
+# Verify: capture IPs -> write consolidated file -> read it back as inventory.
+# Mocks the openstack.cloud.server registered result shape (no cloud here).
+- name: "TEST part 1 - build groups, mock creation, write inventory file"
+  hosts: LocalNodes
+  gather_facts: no
+  vars:
+    platform: { cloud: CH-819381, zone: nova, image: CC-Ubuntu24.04 }
+    inventory_out_dir: /tmp/gen_inv
+  tasks:
+    - import_tasks: tasks/validate_spec.yml
+    - import_tasks: tasks/build_inventory.yml
+
+    # Fabricate _created.results matching the real module return shape:
+    # each entry has .item (host name) and .server.addresses[net] = [ {addr, type} ]
+    - name: "mock created results (structured, parsed from yaml)"
+      ansible.builtin.set_fact:
+        _created:
+          results: "{{ _yaml | from_yaml }}"
+      vars:
+        _yaml: |
+          {% for h in groups['all_provisioned'] | sort %}
+          - item: "{{ h }}"
+            server:
+              addresses:
+                "{{ hostvars[h].node_network }}":
+                  - addr: "10.0.{{ hostvars[h].node_cluster }}.{{ loop.index }}"
+                    "OS-EXT-IPS:type": "fixed"
+          {% endfor %}
+
+    - name: "run the capture + write tasks from the role (reuse, don't duplicate)"
+      ansible.builtin.include_role:
+        name: node_provision
+        tasks_from: capture_and_write.yml
+      # only the capture+write tasks run, not the cloud create
+
+    - name: "show generated file"
+      ansible.builtin.command: cat /tmp/gen_inv/hosts.yml
+      register: _genfile
+      changed_when: false
+    - ansible.builtin.debug:
+        var: _genfile.stdout_lines
+
+# Part 2: read the generated file back as a REAL inventory source and prove the
+# IPs + groups survived to disk -- this is the "configure tomorrow" path.
+- name: "TEST part 2 - read generated inventory back"
+  hosts: k8s_worker
+  gather_facts: no
+  connection: local
+  tasks:
+    - name: "worker has ansible_host from the written file"
+      ansible.builtin.debug:
+        msg: "{{ inventory_hostname }} ansible_host={{ ansible_host }} cluster={{ node_cluster }}"
+      run_once: false

@@ -1,0 +1,14 @@
+---
+# Generates run_deployment.yml: ONE play per pipeline step, each with its target
+# as hosts:. This is the only codegen in the system. Run it whenever you change
+# the pipeline (or wire it as step 0). Output is plain, readable Ansible you can
+# inspect and even run by hand.
+- name: "Generate the deployment runner from the active pipeline"
+  hosts: "{{ local_inventory | default('LocalNodes') }}"
+  gather_facts: no
+  tasks:
+    - name: "Render run_deployment.yml"
+      ansible.builtin.template:
+        src: templates/run_deployment.yml.j2
+        dest: "{{ playbook_dir }}/run_deployment.yml"
+        mode: "0644"

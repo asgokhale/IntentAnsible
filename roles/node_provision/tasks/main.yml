@@ -1,0 +1,67 @@
+---
+# Unified provisioning + consolidated inventory write (Option A), PHASED.
+# Nodes are grouped by node_provision_order (0,1,2,...) and each order tier is
+# fully created AND reachable before the next begins. This lets the bastion
+# (provision_order: 0, with a floating_ip) come up first, so private nodes
+# behind it can be reached in later phases.
+#
+# 1. compute the sorted list of distinct provision orders
+# 2. for each, provision that phase's hosts (see _provision_phase.yml)
+# 3. capture IPs from the accumulated results, write consolidated inventory
+
+- name: "Determine provisioning phases (sorted, unique orders)"
+  ansible.builtin.set_fact:
+    _phases: >-
+      {{ groups['all_provisioned']
+         | map('extract', hostvars, 'node_provision_order')
+         | map('int') | unique | sort }}
+
+# ---- pre-flight: what already exists vs. what we'll create ----------------
+# The create task below uses state:present, which is IDEMPOTENT: existing VMs
+# are left as-is (no duplicate) and their data (incl. addresses) is still
+# returned, so a re-run cleanly RESUMES -- existing nodes are reused, missing
+# ones created. This query does NOT gate creation; it drives the summary and
+# the force-recreate option. Force-replace specific nodes with:
+#   -e 'force_recreate=["PG-M1","PG-WM3"]'   (deleted here, remade below)
+- name: "Query existing servers in this project"
+  openstack.cloud.server_info:
+    cloud: "{{ platform.cloud }}"
+  register: _server_info
+
+- name: "Build set of existing server names"
+  ansible.builtin.set_fact:
+    _existing_servers: "{{ _server_info.servers | map(attribute='name') | list }}"
+    _planned: "{{ groups['all_provisioned'] | sort }}"
+
+- name: "Force-recreate: delete named nodes so they get remade"
+  openstack.cloud.server:
+    cloud: "{{ platform.cloud }}"
+    name: "{{ item }}"
+    state: absent
+    wait: yes
+  loop: "{{ force_recreate | default([]) }}"
+  when: force_recreate | default([]) | length > 0
+
+- name: "Refresh existing set after any forced deletions"
+  ansible.builtin.set_fact:
+    _existing_servers: "{{ _existing_servers | difference(force_recreate | default([])) }}"
+
+- name: "Pre-flight summary (create vs reuse)"
+  ansible.builtin.debug:
+    msg:
+      - "WILL CREATE: {{ _planned | difference(_existing_servers) | sort }}"
+      - "ALREADY EXIST (reuse): {{ _planned | intersect(_existing_servers) | sort }}"
+      - "{{ 'FORCE-RECREATE: ' ~ (force_recreate | default([])) if (force_recreate | default([]) | length > 0) else '' }}"
+
+- name: "Provision each phase in order"
+  ansible.builtin.include_tasks: _provision_phase.yml
+  loop: "{{ _phases }}"
+  loop_control:
+    loop_var: _phase
+    label: "order {{ _phase }}"
+
+- name: "Capture IPs and write consolidated inventory"
+  ansible.builtin.set_fact:
+    _created: "{{ {'results': _created_all | default([]) } }}"
+- name: "Write inventory"
+  ansible.builtin.include_tasks: capture_and_write.yml

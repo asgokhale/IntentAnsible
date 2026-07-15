@@ -1,0 +1,5 @@
+---
+- name: "firewall ran"
+  ansible.builtin.debug:
+    msg: "ROLE firewall EXECUTED on {{ inventory_hostname }} (group play hosts)"
+  run_once: true

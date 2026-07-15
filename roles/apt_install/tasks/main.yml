@@ -1,0 +1,8 @@
+---
+# Converted from tasks/playbook_apt_install_packages.yml -- logic UNCHANGED.
+- name: "Install apt packages"
+  ansible.builtin.apt:
+    name: "{{ item }}"
+    state: latest
+    update_cache: yes
+  loop: "{{ apt_packages }}"

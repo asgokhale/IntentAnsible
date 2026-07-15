@@ -1,0 +1,45 @@
+---
+# ============================================================================
+# GENERATED FILE -- do not edit. Source of truth: specs/<env>.yml + group_vars/all/pipelines.yml
+# Regenerate with: ansible-playbook generate_runner.yml
+# Pipeline: {{ active_pipeline }}
+# ============================================================================
+
+# Phase A: build in-memory groups so role: targets resolve (and, after a
+# provision step, so newly created hosts are addressable in later plays).
+- name: "Resolve spec into host groups"
+  hosts: "{{ local_inventory | default('LocalNodes') }}"
+  gather_facts: no
+  tasks:
+    - import_tasks: tasks/validate_spec.yml
+    - import_tasks: tasks/build_inventory.yml
+
+# Phase B: one play per pipeline step (this is what lets each step target its
+# own hosts -- the thing a single looped play cannot do).
+{% for step in pipelines[active_pipeline] %}
+{% set tgt = step.target %}
+{% if tgt == 'local' %}
+{%   set pattern = local_inventory | default('LocalNodes') %}
+{% elif tgt.startswith('role:') %}
+{%   set pattern = tgt[5:] | replace(',', ':') %}
+{% else %}
+{%   set pattern = tgt %}
+{% endif %}
+- name: "STEP: {{ step.step }}  ->  {{ pattern }}"
+  hosts: "{{ pattern }}"
+  gather_facts: "{{ step.gather_facts | default(false) | lower }}"
+{% if step.remote_user is defined %}
+  remote_user: "{{ step.remote_user }}"
+{% endif %}
+  tasks:
+    - name: "run role {{ step.step }}"
+      ansible.builtin.import_role:
+        name: "{{ step.step }}"
+{% if step.when_setup is defined %}
+      when: setup == "{{ step.when_setup }}"
+{% endif %}
+{% if step.when is defined %}
+      when: {{ step.when }}
+{% endif %}
+
+{% endfor %}

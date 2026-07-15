@@ -1,0 +1,14 @@
+---
+# =============================================================================
+# deploy.yml -- generates the runner from your active pipeline.
+# Ansible resolves import_playbook at PARSE time, so a file generated mid-run
+# can't be imported in the same run. Hence deploy is TWO steps:
+#
+#   1. ansible-playbook ... -e active_pipeline=<name> deploy.yml   # generates
+#   2. ansible-playbook ... run_deployment.yml                     # executes
+#
+# Step 2's inventory:
+#   - provision_only / full first run: -i <local/control inventory>
+#   - configure-only later run:        -i inv/<run>/hosts.yml
+# =============================================================================
+- import_playbook: generate_runner.yml

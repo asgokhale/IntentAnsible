@@ -1,0 +1,59 @@
+---
+# =============================================================================
+# ENVIRONMENT SPEC: Chameleon project CH-819381
+# Self-contained: platform + connection + node_groups + topology.
+# Shared things (pipelines, firewall_rules, roles) live in group_vars/all/.
+# Run:
+#   ./deploy.sh -i inventory_test -e @group_vars/all/control.yml \
+#       -e @specs/ch-819381.yml -e active_pipeline=provision_only
+# =============================================================================
+
+setup: vm
+
+platform:
+  name: chameleon
+  cloud: CH-819381
+  zone: nova
+  image: CC-Ubuntu24.04
+  vm_creation_limit: 10
+
+deploy_conn:
+  remote_user: cc
+  bastion:
+    host: 129.114.25.220          # CH-819381 bastion public IP
+    user: cc
+    key: ~/.ssh/S26_BASTION.pem
+  default_node_key: ~/.ssh/S26_CLUSTER.pem
+  strict_host_key_checking: false
+
+topology:
+  clusters: 4
+
+node_groups:
+  - name: cp
+    count: 4
+    roles: [k8s_control_plane]
+    flavor: b1c41557-38f0-4a4f-9c83-699dee98849e
+    key: S26_CLUSTER
+    networks: [CH-819381-net1, CH-819381-net2, CH-819381-net3, CH-819381-net4]
+    security_groups: [default, ENABLE_SSH, ENABLE_ICMP, ENABLE_HTTP_HTTPS]
+    name_pattern: "NW-C{cluster}-M{role_i}"
+
+  - name: workers
+    count: 48
+    roles: [k8s_worker]
+    flavor: LARGE-FLAVOR-LEASE-ID
+    key: S26_CLUSTER
+    networks: [CH-819381-net1, CH-819381-net2, CH-819381-net3, CH-819381-net4]
+    security_groups: [default, ENABLE_SSH, ENABLE_ICMP, ENABLE_HTTP_HTTPS]
+    name_pattern: "NW-C{cluster}-W{role_i}"
+
+  - name: reg
+    count: 2
+    roles: [docker_registry]
+    flavor: b1c41557-38f0-4a4f-9c83-699dee98849e
+    key: S26_CLUSTER
+    networks: [CH-819381-main]
+    security_groups: [default, ENABLE_SSH, ENABLE_ICMP, ENABLE_HTTP_HTTPS]
+    name_pattern: "NW-REG{role_i}"
+    shard_by: none

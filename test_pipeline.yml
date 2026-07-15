@@ -1,0 +1,4 @@
+---
+# LIVE-path smoke test: generate the runner from the demo configure spec.
+# Execution itself is covered by ./deploy.sh (see README Part 4).
+- import_playbook: generate_runner.yml

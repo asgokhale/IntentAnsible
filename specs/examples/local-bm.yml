@@ -1,0 +1,47 @@
+---
+# =============================================================================
+# ENVIRONMENT SPEC: local BARE-METAL machines (setup: bm)
+# Structurally different from the cloud specs:
+#   - setup: bm  -> the node_provision step is gated out (when_setup: vm), so
+#     NOTHING is created; the pipeline's configuration steps still run.
+#   - no bastion, no flavors, no OpenStack. Machines already exist.
+#   - because there's no provisioning to DISCOVER IPs, you supply them here.
+#
+# Run (no provisioning; configure existing machines):
+#   ./deploy.sh -i inventory_test -e @group_vars/all/control.yml \
+#       -e @specs/local-bm.yml -e active_pipeline=configure
+# =============================================================================
+
+setup: bm
+
+platform:
+  name: local              # not chameleon -> firewalld step auto-skips
+  image: n/a
+
+deploy_conn:
+  remote_user: gokhale
+  # no bastion block: these are directly reachable on the LAN
+  default_node_key: ~/.ssh/id_rsa
+  strict_host_key_checking: false
+
+topology:
+  clusters: 1
+
+# For bare metal, each node lists its REAL address. `static_hosts` is the
+# bare-metal counterpart to count+name_pattern: explicit machines, not derived.
+node_groups:
+  - name: lab
+    roles: [k8s_control_plane]
+    key: n/a
+    static_hosts:
+      - { name: lab-cp1, ip: 192.168.50.11 }
+    shard_by: none
+
+  - name: labworkers
+    roles: [k8s_worker]
+    key: n/a
+    static_hosts:
+      - { name: lab-w1, ip: 192.168.50.21 }
+      - { name: lab-w2, ip: 192.168.50.22 }
+      - { name: lab-w3, ip: 192.168.50.23 }
+    shard_by: none

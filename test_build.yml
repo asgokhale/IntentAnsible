@@ -1,0 +1,20 @@
+---
+- name: "TEST - build inventory from spec and dump groups"
+  hosts: LocalNodes
+  gather_facts: no
+  tasks:
+    - import_tasks: tasks/validate_spec.yml
+    - import_tasks: tasks/build_inventory.yml
+    - name: "control_plane group"
+      ansible.builtin.debug:
+        msg: "k8s_control_plane = {{ groups['k8s_control_plane'] | default([]) | sort }}"
+    - name: "worker count"
+      ansible.builtin.debug:
+        msg: "k8s_worker count = {{ groups['k8s_worker'] | default([]) | length }}, sample = {{ (groups['k8s_worker'] | default([]))[:4] | sort }}"
+    - name: "registry group"
+      ansible.builtin.debug:
+        msg: "docker_registry = {{ groups['docker_registry'] | default([]) | sort }}"
+    - name: "per-node detail for control plane"
+      ansible.builtin.debug:
+        msg: "{{ item }}: cluster={{ hostvars[item].node_cluster }} net={{ hostvars[item].node_network }}"
+      loop: "{{ groups['k8s_control_plane'] | default([]) | sort }}"

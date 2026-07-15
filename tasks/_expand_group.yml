@@ -1,0 +1,57 @@
+---
+# For ONE node group. Two modes:
+#   A) static_hosts present (bare metal): use explicit name+ip, set ansible_host
+#      now (no provisioning will discover it).
+#   B) count + name_pattern (cloud): derive names; ansible_host is filled later
+#      from os_server facts by node_provision.
+- name: "[{{ ng.name }}] static (bare-metal) hosts"
+  ansible.builtin.add_host:
+    name: "{{ sh.name }}"
+    groups: "{{ ng.roles + ['all_provisioned'] }}"
+    ansible_host: "{{ sh.ip }}"
+    node_group: "{{ ng.name }}"
+    node_cluster: 1
+    node_role_i: "{{ idx + 1 }}"
+    node_flavor: "n/a"
+    node_key: "{{ ng.key | default('n/a') }}"
+    node_ssh_key_file: "{{ ng.ssh_key_file | default(deploy_conn.bastion.key if ('bastion' in ng.roles) else deploy_conn.default_node_key) }}"
+    node_image: "n/a"
+    node_security_groups: "{{ ng.security_groups | default([]) }}"
+    node_network: "{{ ng.networks[0] | default('n/a') }}"
+    node_provision_order: "{{ ng.provision_order | default(1) }}"
+    node_floating_ip: "{{ ng.floating_ip | default('') }}"
+  loop: "{{ ng.static_hosts | default([]) }}"
+  loop_control:
+    loop_var: sh
+    index_var: idx
+    label: "{{ sh.name }} ({{ sh.ip }})"
+  when: ng.static_hosts is defined
+
+- name: "[{{ ng.name }}] derived (cloud) hosts"
+  ansible.builtin.add_host:
+    name: >-
+      {{ ng.name_pattern
+         | regex_replace('{cluster}', _cluster | string)
+         | regex_replace('{role_i}',  _role_i | string)
+         | regex_replace('{gi}', i | string) }}
+    groups: "{{ ng.roles + ['all_provisioned'] }}"
+    node_group: "{{ ng.name }}"
+    node_cluster: "{{ _cluster }}"
+    node_role_i: "{{ _role_i }}"
+    node_flavor: "{{ ng.flavor }}"
+    node_key: "{{ ng.key }}"
+    node_ssh_key_file: "{{ ng.ssh_key_file | default(deploy_conn.bastion.key if ('bastion' in ng.roles) else deploy_conn.default_node_key) }}"
+    node_image: "{{ ng.image | default(platform.image) }}"
+    node_security_groups: "{{ ng.security_groups }}"
+    node_network: "{{ ng.networks[ (_cluster - 1) % (ng.networks | length) ] }}"
+    node_provision_order: "{{ ng.provision_order | default(1) }}"   # 0 = first phase (bastion); default 1
+    node_floating_ip: "{{ ng.floating_ip | default('') }}"          # '' = private only (auto_ip false)
+  loop: "{{ range(0, ng.count | int) | list }}"
+  loop_control:
+    loop_var: i
+    label: "instance {{ i }}"
+  vars:
+    _sharded: "{{ (ng.shard_by | default('cluster')) == 'cluster' }}"
+    _cluster: "{{ (i % (topology.clusters | int)) + 1 if _sharded else 1 }}"
+    _role_i: "{{ (i // (topology.clusters | int)) + 1 if _sharded else i + 1 }}"
+  when: ng.static_hosts is not defined
