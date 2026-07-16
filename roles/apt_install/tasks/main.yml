@@ -1,5 +1,18 @@
 ---
-# Converted from tasks/playbook_apt_install_packages.yml -- logic UNCHANGED.
+# Install apt packages listed in `apt_packages` (USER DATA -- supply via your
+# deployment's vars/packages.yml). Fails early with guidance if not provided.
+- name: "Check apt_packages is defined"
+  ansible.builtin.assert:
+    that:
+      - apt_packages is defined
+      - apt_packages | length > 0
+    fail_msg: >-
+      'apt_packages' is not set. Copy
+      specs/examples/sample-deployment/vars/packages.yml into your deployment's
+      vars/ directory, edit it, and it will load automatically with
+      --deployment (or pass it with -e @.../packages.yml).
+    quiet: true
+
 - name: "Install apt packages"
   ansible.builtin.apt:
     name: "{{ item }}"

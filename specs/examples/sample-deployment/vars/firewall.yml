@@ -1,5 +1,6 @@
 ---
-# Replaces 20 hand-written firewalld tasks. (Notes 5 & 10.)
+# Ports opened by the firewall role. USER DATA -- this k8s set is just an
+# example; a non-k8s deployment would list entirely different ports.
 firewall_rules:
   - { port: "2379-2381/tcp" }   # etcd
   - { port: "6443/tcp" }        # apiserver

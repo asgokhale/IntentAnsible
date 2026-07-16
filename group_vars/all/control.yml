@@ -1,6 +1,0 @@
----
-# control-node + connection vars (was control_vars.yml). Kept separate from the
-# deployment spec so they don't change between deployments.
-local_user: gokhale
-local_inventory: LocalNodes
-remote_cloud_user: cc

@@ -1,10 +1,97 @@
 #!/usr/bin/env bash
-# Convenience: generate the runner, then run it -- as two real invocations
-# (required; see deploy.yml). Pass the same -e/-i args you'd pass ansible.
-# Usage: ./deploy.sh -i inventory_test -e @mydeployments/ch-819381.yml \
-#                    -e active_pipeline=provision_only
+# =============================================================================
+# deploy.sh -- generate the pipeline runner, then run it (two real invocations;
+# see deploy.yml for why they can't be one).
+#
+# TWO WAYS TO PASS YOUR DEPLOYMENT DATA:
+#
+# 1. --deployment <dir>   (convenient)
+#      Loads, in this DEFINED ORDER, everything under the deployment directory:
+#         <dir>/spec.yml
+#         <dir>/pipeline.yml
+#         <dir>/vars/*.yml   (alphabetical)
+#      Later files override earlier ones (standard Ansible -e precedence), so
+#      vars/ can override pipeline/spec if needed.
+#      Example:
+#        ./deploy.sh --deployment mydeployments/pangea -i local.ini \
+#            -e active_pipeline=full
+#
+# 2. explicit -e @... flags   (full control; power users)
+#        ./deploy.sh -i local.ini \
+#            -e @mydeployments/pangea/spec.yml \
+#            -e @mydeployments/pangea/pipeline.yml \
+#            -e @mydeployments/pangea/vars/control.yml \
+#            -e active_pipeline=full
+#
+# Anything you pass besides --deployment is forwarded to ansible-playbook as-is,
+# so you can mix: use --deployment and still add extra -e overrides.
+# =============================================================================
 set -euo pipefail
+
+DEPLOY_DIR=""
+PASSTHRU=()
+
+# Separate --deployment from the args forwarded to ansible-playbook.
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --deployment)
+      DEPLOY_DIR="${2:-}"
+      if [[ -z "$DEPLOY_DIR" ]]; then
+        echo "[deploy] ERROR: --deployment needs a directory path" >&2
+        exit 2
+      fi
+      shift 2
+      ;;
+    --deployment=*)
+      DEPLOY_DIR="${1#*=}"
+      shift
+      ;;
+    *)
+      PASSTHRU+=("$1")
+      shift
+      ;;
+  esac
+done
+
+# Build the -e flags from a deployment directory, in a DEFINED order.
+DEPLOY_ARGS=()
+if [[ -n "$DEPLOY_DIR" ]]; then
+  DEPLOY_DIR="${DEPLOY_DIR%/}"   # strip trailing slash
+  if [[ ! -d "$DEPLOY_DIR" ]]; then
+    echo "[deploy] ERROR: deployment directory not found: $DEPLOY_DIR" >&2
+    exit 2
+  fi
+  # spec.yml (required)
+  if [[ -f "$DEPLOY_DIR/spec.yml" ]]; then
+    DEPLOY_ARGS+=(-e "@$DEPLOY_DIR/spec.yml")
+  else
+    echo "[deploy] ERROR: missing required $DEPLOY_DIR/spec.yml" >&2
+    echo "         (copy specs/examples/sample-deployment/spec.yml and edit it)" >&2
+    exit 2
+  fi
+  # pipeline.yml (required)
+  if [[ -f "$DEPLOY_DIR/pipeline.yml" ]]; then
+    DEPLOY_ARGS+=(-e "@$DEPLOY_DIR/pipeline.yml")
+  else
+    echo "[deploy] ERROR: missing required $DEPLOY_DIR/pipeline.yml" >&2
+    echo "         (copy specs/examples/sample-deployment/pipeline.yml and edit it)" >&2
+    exit 2
+  fi
+  # vars/*.yml (optional, alphabetical)
+  if [[ -d "$DEPLOY_DIR/vars" ]]; then
+    shopt -s nullglob
+    for vf in "$DEPLOY_DIR"/vars/*.yml; do
+      DEPLOY_ARGS+=(-e "@$vf")
+    done
+    shopt -u nullglob
+  fi
+  echo "[deploy] deployment '$DEPLOY_DIR' -> loading:"
+  for ((i=0; i<${#DEPLOY_ARGS[@]}; i+=2)); do echo "           ${DEPLOY_ARGS[i+1]#@}"; done
+fi
+
+ALL_ARGS=("${DEPLOY_ARGS[@]}" "${PASSTHRU[@]}")
+
 echo "[deploy] generating runner..."
-ansible-playbook "$@" generate_runner.yml
+ansible-playbook "${ALL_ARGS[@]}" generate_runner.yml
 echo "[deploy] running generated pipeline..."
-ansible-playbook "$@" run_deployment.yml
+ansible-playbook "${ALL_ARGS[@]}" run_deployment.yml

@@ -1,0 +1,7 @@
+---
+# Control-node + connection user settings. REPLACE with your values.
+# (These are USER DATA -- your real copy lives in mydeployments/<name>/vars/,
+#  never committed.)
+local_user: YOUR_LOCAL_USERNAME       # your username on the control machine
+local_inventory: LocalNodes           # group name in local.ini (leave as-is)
+remote_cloud_user: cc                 # default SSH user on the cloud VMs

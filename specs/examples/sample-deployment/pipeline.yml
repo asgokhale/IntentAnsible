@@ -1,11 +1,19 @@
 ---
-# SHARED across all environments. The steps to build a k8s cluster don't change
-# per project, so they live here once -- edit a step or its order ONCE, and all
-# environments get it. Per-environment specs in specs/ do NOT redefine these.
+# =============================================================================
+# EXAMPLE pipeline definitions. COPY this to your private area and edit:
+#     cp specs/examples/pipelines.example.yml mydeployments/pipelines.yml
+# then pass it on the command line:
+#     ./deploy.sh ... -e @mydeployments/pipelines.yml -e active_pipeline=full
 #
-# (Bare-metal note: the provision_only / provisioning steps are gated by
-#  when_setup: vm, so on a setup: bm spec they simply skip -- same pipeline,
-#  no separate definition needed.)
+# A pipeline is an ordered list of steps; each step runs a role against hosts
+# selected by role (e.g. role:k8s_worker) or the all_provisioned group. Your
+# real pipeline is YOURS -- it lives in mydeployments/ (gitignored), not here.
+# This file is only a reference example (k8s-on-cloud shown).
+#
+# Bare-metal note: provisioning steps are gated by when_setup: vm, so on a
+# setup: bm spec they simply skip.
+# =============================================================================
+
 pipelines:
 
   provision_only:

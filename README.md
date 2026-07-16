@@ -25,56 +25,67 @@ deployment by editing data, not by editing playbooks.
 
 ## Layout
 
-    deploy.sh                     run this; generates + runs the pipeline
+    deploy.sh                     run this; --deployment <dir> loads a deployment
     generate_runner.yml           compiles pipeline -> run_deployment.yml
     run_deployment.yml            GENERATED each run (one play per step); do not edit
-    group_vars/all/               SHARED across all environments (auto-loaded)
-      firewall.yml                  firewall_rules (k8s ports)
-      control.yml                   local_user, etc.
+    group_vars/all/               shared framework vars (currently none; user data
+                                    lives per-deployment, see below)
     roles/                        the actual logic (one role per former child playbook)
     tasks/                        spec validation + inventory building
     templates/                    generated-runner + generated-inventory templates
-    specs/examples/               SPEC + PIPELINE TEMPLATES (overwritten on update)
-      pipelines.example.yml         reference pipeline -- copy to mydeployments/
-    mydeployments/                YOUR real specs AND pipeline (never touched by updates)
-    inv/                          generated inventories (ansible_host etc.) written here
+    specs/examples/               TEMPLATES (overwritten on update)
+      sample-deployment/            a COMPLETE example deployment to copy:
+        spec.yml                      nodes, connection, topology
+        pipeline.yml                  ordered steps
+        vars/                         per-role user data
+          control.yml                   local_user, remote_cloud_user
+          packages.yml                  apt_packages
+          firewall.yml                  firewall_rules
+    mydeployments/                YOUR deployments (gitignored, never touched):
+      <name>/                       one dir per deployment, mirroring the sample
+        spec.yml  pipeline.yml  vars/*.yml
+    inv/                          generated inventories (ansible_host etc.)
     local.ini                     local inventory: the control node (localhost)
-    FRAMEWORK_MANIFEST.txt        which files are Claude's vs yours
-    update_framework.sh           safely apply a framework update without touching your data
+    FRAMEWORK_MANIFEST.txt        which files are framework vs yours
+    update_framework.sh           apply a framework update without touching your data
+
+Principle: **anything with a real value you supply -- usernames, packages,
+ports, IPs, keys, node counts -- is USER DATA and lives under
+`mydeployments/<name>/`, never in the committed tree.** The committed tree holds
+only mechanism (engine, role logic) and `specs/examples/` templates.
 
 
 ## Quick start
 
-    # one-time: create your real spec AND pipeline from the templates
+    # one-time: create your deployment from the sample, then edit it
     git init && git add -A && git commit -m "baseline"
-    cp specs/examples/ch-pangea.yml         mydeployments/ch-pangea.yml
-    cp specs/examples/pipelines.example.yml mydeployments/pipelines.yml
-    #   edit ch-pangea.yml: bastion IP, .pem paths, lease IDs, networks
-    #   edit pipelines.yml: your step order (this is YOUR data, gitignored)
+    cp -r specs/examples/sample-deployment mydeployments/pangea
+    #   edit mydeployments/pangea/spec.yml      (bastion IP, keys, lease IDs, networks)
+    #   edit mydeployments/pangea/pipeline.yml  (your step order)
+    #   edit mydeployments/pangea/vars/*.yml    (control user, packages, firewall ports)
 
     # provision only (first run): create VMs, write inventory, then STOP
-    ./deploy.sh -i local.ini -e @group_vars/all/control.yml \
-        -e @mydeployments/pipelines.yml -e @mydeployments/ch-pangea.yml \
+    ./deploy.sh --deployment mydeployments/pangea -i local.ini \
         -e active_pipeline=provision_only -e inventory_out_dir=inv/pangea
 
     #   -> inspect inv/pangea/hosts.yml: confirm captured IPs are the private
     #      addresses your configure steps expect.
 
     # configure later (reads the generated inventory; no cloud query)
-    ./deploy.sh -i inv/pangea/hosts.yml -e @group_vars/all/control.yml \
-        -e @mydeployments/pipelines.yml -e @mydeployments/ch-pangea.yml \
+    ./deploy.sh --deployment mydeployments/pangea -i inv/pangea/hosts.yml \
         -e active_pipeline=configure
 
     # or, once trusted: provision + configure in one go
-    ./deploy.sh -i local.ini -e @group_vars/all/control.yml \
-        -e @mydeployments/pipelines.yml -e @mydeployments/ch-pangea.yml \
+    ./deploy.sh --deployment mydeployments/pangea -i local.ini \
         -e active_pipeline=full
 
+`--deployment <dir>` loads, in order: `spec.yml`, `pipeline.yml`, then
+`vars/*.yml` (alphabetical). Later files override earlier. Power users can skip
+`--deployment` and pass explicit `-e @<file>` flags instead (or mix both).
+
 Notes:
-- The pipeline (`-e @mydeployments/pipelines.yml`) is YOUR data, not framework:
-  copied from `specs/examples/pipelines.example.yml` and edited to your steps.
-  It is NOT auto-loaded -- you pass it explicitly, so different deployments can
-  use different pipelines.
+- Everything under your deployment dir is YOUR data (gitignored). The committed
+  `specs/examples/sample-deployment/` is the template you copied from.
 - Run from inside your OpenStack venv (the openstacksdk must match the
   openstack.cloud collection, or server creation fails with obscure errors).
 - `-i local.ini` points Ansible at the local control node for provisioning
@@ -83,6 +94,8 @@ Notes:
 - `deploy.sh` is two ansible-playbook calls (generate, then run). They can't be
   one command: import_playbook resolves at parse time, so a runner generated
   mid-run can't be imported in the same run.
+- Missing a required var (packages, firewall ports)? The run fails early with a
+  message telling you exactly which file to copy from the sample.
 
 ### Re-running is safe (resume)
 Re-running provisioning does NOT duplicate VMs. Creation uses openstack
@@ -97,8 +110,7 @@ Matching is by NAME only: if a VM exists but you changed its flavor/image in the
 spec, the existing one is left as-is. To replace specific nodes, force-recreate
 (delete + remake) them, leaving everything else reused:
 
-    ./deploy.sh -i local.ini -e @group_vars/all/control.yml \
-        -e @mydeployments/pipelines.yml -e @mydeployments/ch-pangea.yml \
+    ./deploy.sh --deployment mydeployments/pangea -i local.ini \
         -e active_pipeline=provision_only \
         -e 'force_recreate=["PG-WM3","PG-M1"]'
 
@@ -180,17 +192,16 @@ The connection var is `deploy_conn` (not `connection`, which Ansible reserves).
 
 ## Multiple environments
 
-One self-contained spec per environment in `mydeployments/` (real) or
-`specs/examples/` (templates). Pick one at run time with `-e @<path>`; shared
-`group_vars/all/*` load automatically.
+Each deployment is a directory under `mydeployments/<name>/` holding its own
+`spec.yml`, `pipeline.yml`, and `vars/`. Select one with
+`--deployment mydeployments/<name>`. Add a new environment by copying the sample
+to a new directory and editing it -- nothing else changes.
 
-Per-environment (in `mydeployments/`, gitignored): the spec (platform.cloud,
-deploy_conn, node_groups, topology) AND your pipeline (step order). Both are
-YOUR data, passed explicitly with `-e @...`.
-
-Shared framework (in `group_vars/all/`, auto-loaded): firewall_rules, control.
-Reusable roles and the engine. Reference templates live in `specs/examples/`
-(specs and `pipelines.example.yml`).
+Everything in a deployment directory is YOUR data (gitignored): the spec
+(platform.cloud, deploy_conn, node_groups, topology), the pipeline (step order),
+and the role vars (control user, packages, firewall ports). The committed tree
+holds only the engine, the roles, and `specs/examples/sample-deployment/` as the
+template to copy.
 
 Bare metal differs structurally: `setup: bm` gates out provisioning (node
 provision step has `when_setup: vm`), `platform.name != chameleon` skips the

@@ -1,5 +1,25 @@
 ---
-- name: "firewall ran"
-  ansible.builtin.debug:
-    msg: "ROLE firewall EXECUTED on {{ inventory_hostname }} (group play hosts)"
-  run_once: true
+# Open ports listed in `firewall_rules` (USER DATA -- supply via your
+# deployment's vars/firewall.yml). Fails early with guidance if not provided.
+- name: "Check firewall_rules is defined"
+  ansible.builtin.assert:
+    that:
+      - firewall_rules is defined
+      - firewall_rules | length > 0
+    fail_msg: >-
+      'firewall_rules' is not set. Copy
+      specs/examples/sample-deployment/vars/firewall.yml into your deployment's
+      vars/ directory, edit it, and it will load automatically with
+      --deployment (or pass it with -e @.../firewall.yml).
+    quiet: true
+
+- name: "Open firewall ports"
+  ansible.posix.firewalld:
+    port: "{{ item.port }}"
+    zone: "{{ item.zone | default('public') }}"
+    permanent: true
+    immediate: true
+    state: enabled
+  loop: "{{ firewall_rules }}"
+  loop_control:
+    label: "{{ item.port }}"

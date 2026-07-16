@@ -20,9 +20,9 @@ specs/examples/        # TEMPLATES ONLY -- overwritten on update
 
 # Files YOU OWN (framework updates must NEVER touch these):
 mydeployments/         # your real specs live here (or anywhere outside the tree)
-group_vars/all/control.yml      # your local_user etc.
-mydeployments/pipelines.yml     # YOUR real pipeline (gitignored)
-group_vars/all/firewall.yml     # your ports
+
+mydeployments/<name>/           # YOUR deployment dirs: spec, pipeline, vars (gitignored)
+
 roles/apt_install/  roles/firewall/  roles/k8s_start/  ... # your real role logic
 inv/                            # your captured inventories
 

@@ -1,0 +1,10 @@
+---
+# Packages for the apt_install role. USER DATA -- edit freely.
+# One flat list applied to all targeted nodes. If you want different packages
+# per node role, define per-group lists instead (e.g. in group_vars/<role>.yml
+# under your deployment) -- the role reads `apt_packages` either way.
+apt_packages:
+  - curl
+  - vim
+  - git
+  - build-essential
