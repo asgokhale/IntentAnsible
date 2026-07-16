@@ -1,24 +1,13 @@
-# Your real deployment specs (bastion IPs, keys, lease IDs) -- NEVER commit
-mydeployments/
-
-# Generated inventories + cross-step state (IPs, tokens, passwords)
-inv/
-
-# Ansible run artifacts (regenerated every run)
+# Ansible run artifacts (regenerated every run -- never commit)
 run_deployment.yml
 *.retry
+inv/*/hosts.yml
 *.log
 
-# Python virtualenv (machine-specific, large)
-.venv/
-venv/
-
-# SSH keys -- never allow into the repo
-*.pem
-*.key
+# Your real inventories with captured IPs (optional: keep private)
+# inv/
 
 # Editor / OS noise
 *.swp
 .DS_Store
-*~
-*~
+mydeployments/

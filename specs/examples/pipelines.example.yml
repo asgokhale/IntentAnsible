@@ -1,0 +1,41 @@
+---
+# =============================================================================
+# EXAMPLE pipeline definitions. COPY this to your private area and edit:
+#     cp specs/examples/pipelines.example.yml mydeployments/pipelines.yml
+# then pass it on the command line:
+#     ./deploy.sh ... -e @mydeployments/pipelines.yml -e active_pipeline=full
+#
+# A pipeline is an ordered list of steps; each step runs a role against hosts
+# selected by role (e.g. role:k8s_worker) or the all_provisioned group. Your
+# real pipeline is YOURS -- it lives in mydeployments/ (gitignored), not here.
+# This file is only a reference example (k8s-on-cloud shown).
+#
+# Bare-metal note: provisioning steps are gated by when_setup: vm, so on a
+# setup: bm spec they simply skip.
+# =============================================================================
+
+pipelines:
+
+  provision_only:
+    # ===== PROVISIONING =====
+    - { step: node_provision, target: local, when_setup: vm }
+
+  full:
+    # ===== PROVISIONING =====
+    - { step: node_provision, target: local, when_setup: vm }
+    # ===== CONFIGURATION =====
+    - { step: apt_install,    target: "role:k8s_control_plane,k8s_worker,docker_registry", gather_facts: true }
+    - { step: firewall,       target: "role:k8s_control_plane,k8s_worker" }
+    - { step: k8s_start,      target: "role:k8s_control_plane" }
+    # ... add the rest of your converted child playbooks here, in order ...
+
+  # configure-only: skip provisioning, just (re)configure existing nodes.
+  # Use with -i inv/<run>/hosts.yml on a later day.
+  configure:
+    # ===== CONFIGURATION =====
+    - { step: apt_install,    target: "role:k8s_control_plane,k8s_worker,docker_registry", gather_facts: true }
+    - { step: firewall,       target: "role:k8s_control_plane,k8s_worker" }
+    - { step: k8s_start,      target: "role:k8s_control_plane" }
+
+# Default if not overridden on CLI with -e active_pipeline=...
+active_pipeline: full

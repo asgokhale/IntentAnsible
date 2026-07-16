@@ -16,11 +16,12 @@ test_inventory_roundtrip.yml
 test_pipeline.yml
 test_provision_params.yml
 specs/examples/        # TEMPLATES ONLY -- overwritten on update
+#   (includes pipelines.example.yml -- the reference pipeline)
 
 # Files YOU OWN (framework updates must NEVER touch these):
 mydeployments/         # your real specs live here (or anywhere outside the tree)
 group_vars/all/control.yml      # your local_user etc.
-group_vars/all/pipelines.yml    # your step order (yours once you customize)
+mydeployments/pipelines.yml     # YOUR real pipeline (gitignored)
 group_vars/all/firewall.yml     # your ports
 roles/apt_install/  roles/firewall/  roles/k8s_start/  ... # your real role logic
 inv/                            # your captured inventories
