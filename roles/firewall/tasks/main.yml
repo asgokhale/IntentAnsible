@@ -1,18 +1,6 @@
 ---
-# Open ports listed in `firewall_rules` (USER DATA -- supply via your
-# deployment's vars/firewall.yml). Fails early with guidance if not provided.
-- name: "Check firewall_rules is defined"
-  ansible.builtin.assert:
-    that:
-      - firewall_rules is defined
-      - firewall_rules | length > 0
-    fail_msg: >-
-      'firewall_rules' is not set. Copy
-      specs/examples/sample-deployment/vars/firewall.yml into your deployment's
-      vars/ directory, edit it, and it will load automatically with
-      --deployment (or pass it with -e @.../firewall.yml).
-    quiet: true
-
+# Open ports from `firewall_rules` (user data; declared as a `requires:` on the
+# pipeline step, so it's validated pre-flight -- no per-role guard needed).
 - name: "Open firewall ports"
   ansible.posix.firewalld:
     port: "{{ item.port }}"

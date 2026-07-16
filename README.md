@@ -180,6 +180,23 @@ How it works:
   bastion's `floating_ip` (private nodes' proxy uses `deploy_conn.bastion.host`).
 
 
+## Declaring required inputs (`requires:`)
+
+A pipeline step can declare the user vars it needs:
+
+    - { step: apt_install, target: "role:k8s_worker", requires: [apt_packages] }
+    - { step: firewall,    target: "role:k8s_worker", requires: [firewall_rules] }
+
+Before anything runs, a single pre-flight pass checks EVERY required var for
+EVERY step in the active pipeline and reports ALL missing ones at once -- so you
+fix your inputs in one pass, not one failed step at a time. Steps with no
+`requires:` are not checked. Roles themselves carry no guard code; the
+declaration lives on the pipeline step, keeping roles pure logic.
+
+When you port a new step that needs a user-supplied value, add `requires: [that_var]`
+to its pipeline line -- do NOT add assert/guard tasks inside the role.
+
+
 ## Connection model (your ~/.ssh/config is never touched)
 
 Ansible reaches nodes self-contained, from the spec's `deploy_conn:` block. The

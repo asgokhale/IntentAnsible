@@ -1,12 +1,40 @@
 ---
 # Generates run_deployment.yml: ONE play per pipeline step, each with its target
-# as hosts:. This is the only codegen in the system. Run it whenever you change
-# the pipeline (or wire it as step 0). Output is plain, readable Ansible you can
-# inspect and even run by hand.
+# as hosts:. This is the only codegen in the system.
+#
+# Also does PRE-FLIGHT validation: each step may declare `requires: [var, ...]`
+# naming the user-supplied vars it needs. Before generating anything, we check
+# ALL required vars for ALL steps in the active pipeline and report EVERY
+# missing one at once -- so users fix their inputs in a single pass instead of
+# discovering them one failed step at a time, mid-run.
 - name: "Generate the deployment runner from the active pipeline"
   hosts: "{{ local_inventory | default('LocalNodes') }}"
   gather_facts: no
   tasks:
+    - name: "Pre-flight: collect required vars that are missing/empty"
+      ansible.builtin.set_fact:
+        _missing_requires: >-
+          {{ _missing_requires | default([])
+             + [ {'step': item.0.step, 'var': item.1} ]
+             if (vars[item.1] is not defined or vars[item.1] | length == 0)
+             else _missing_requires | default([]) }}
+      loop: "{{ pipelines[active_pipeline] | subelements('requires', skip_missing=True) }}"
+      loop_control:
+        label: "{{ item.0.step }} needs {{ item.1 }}"
+
+    - name: "Pre-flight: fail with ALL missing inputs at once"
+      ansible.builtin.assert:
+        that: "_missing_requires | default([]) | length == 0"
+        fail_msg: |-
+          Your deployment is missing required inputs. Set each var below (copy the
+          matching file from specs/examples/sample-deployment/vars/ into your
+          deployment's vars/ directory, or pass with -e), then re-run:
+          {% for m in _missing_requires | default([]) %}
+            - step '{{ m.step }}' requires: {{ m.var }}
+          {% endfor %}
+        success_msg: "Pre-flight OK: all required inputs present."
+        quiet: true
+
     - name: "Render run_deployment.yml"
       ansible.builtin.template:
         src: templates/run_deployment.yml.j2

@@ -24,8 +24,8 @@ pipelines:
     # ===== PROVISIONING =====
     - { step: node_provision, target: local, when_setup: vm }
     # ===== CONFIGURATION =====
-    - { step: apt_install,    target: "role:k8s_control_plane,k8s_worker,docker_registry", gather_facts: true }
-    - { step: firewall,       target: "role:k8s_control_plane,k8s_worker" }
+    - { step: apt_install,    target: "role:k8s_control_plane,k8s_worker,docker_registry", gather_facts: true, requires: [apt_packages] }
+    - { step: firewall,       target: "role:k8s_control_plane,k8s_worker", requires: [firewall_rules] }
     - { step: k8s_start,      target: "role:k8s_control_plane" }
     # ... add the rest of your converted child playbooks here, in order ...
 
@@ -33,8 +33,8 @@ pipelines:
   # Use with -i inv/<run>/hosts.yml on a later day.
   configure:
     # ===== CONFIGURATION =====
-    - { step: apt_install,    target: "role:k8s_control_plane,k8s_worker,docker_registry", gather_facts: true }
-    - { step: firewall,       target: "role:k8s_control_plane,k8s_worker" }
+    - { step: apt_install,    target: "role:k8s_control_plane,k8s_worker,docker_registry", gather_facts: true, requires: [apt_packages] }
+    - { step: firewall,       target: "role:k8s_control_plane,k8s_worker", requires: [firewall_rules] }
     - { step: k8s_start,      target: "role:k8s_control_plane" }
 
 # Default if not overridden on CLI with -e active_pipeline=...
