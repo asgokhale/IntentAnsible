@@ -197,6 +197,22 @@ When you port a new step that needs a user-supplied value, add `requires: [that_
 to its pipeline line -- do NOT add assert/guard tasks inside the role.
 
 
+## Repeated steps and step ids
+
+If the same role runs more than once (e.g. two `reboot` steps, or several
+`copy_files`), give each an optional `id:` so the selectors can tell them apart:
+
+    - { id: reboot_private, step: reboot, target: "role:k8s_control_plane,k8s_worker" }
+    - { id: reboot_bastion, step: reboot, target: "role:bastion" }
+
+`id` defaults to the step (role) name when omitted, so single-use steps need no
+id. `start_at`/`only_steps`/`list_steps` all match on id.
+
+Reboot ordering note: reboot the bastion LAST, as its own step. Rebooting it
+earlier would cut off every node reached THROUGH it. Private nodes reboot first
+(via the working bastion); the bastion reboots last and is reached directly.
+
+
 ## Running part of a pipeline (`start_at` / `only_steps` / `list_steps`)
 
 For iterating or resuming, you can run a subset of the active pipeline:

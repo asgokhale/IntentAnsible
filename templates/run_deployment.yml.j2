@@ -27,7 +27,7 @@
 {% else %}
 {%   set pattern = tgt %}
 {% endif %}
-- name: "STEP: {{ step.step }}  ->  {{ pattern }}"
+- name: "STEP: {{ step._id | default(step.step) }}  ->  {{ pattern }}"
   hosts: "{{ pattern }}"
   gather_facts: "{{ step.gather_facts | default(false) | lower }}"
 {% if step.remote_user is defined %}

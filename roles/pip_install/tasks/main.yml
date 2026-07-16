@@ -1,0 +1,12 @@
+---
+# In this playbook we install packages via pip. In modern Linux like
+# Ubuntu, it is required to add python packages in a virtual environment
+#
+  - name: "Install a variety of packages via pip3"
+    ansible.builtin.pip:
+      name: "{{ pip_packages }}"   # a list (hopefully installs faster than in a loop)
+      state: latest
+      virtualenv: "{{ venv_dir }}"  # will create if it does not exist
+      virtualenv_site_packages: false # whether to inherit packages from global site or not
+...
+

@@ -14,25 +14,42 @@
   connection: local
   gather_facts: no
   tasks:
-    - name: "Compute effective step list (apply start_at / only_steps)"
+    - name: "Normalize step ids (id defaults to the step/role name)"
+      ansible.builtin.set_fact:
+        _all_steps: >-
+          {{ pipelines[active_pipeline]
+             | map('combine', {}) | list }}
+
+    - name: "Attach effective id to each step"
+      ansible.builtin.set_fact:
+        _all_steps: >-
+          {{ _all_steps[:idx]
+             + [ item | combine({'_id': item.id | default(item.step)}) ]
+             + _all_steps[idx+1:] }}
+      loop: "{{ _all_steps }}"
+      loop_control:
+        index_var: idx
+        label: "{{ item.id | default(item.step) }}"
+
+    - name: "Compute effective step list (apply start_at / only_steps, matched by id)"
       ansible.builtin.set_fact:
         _steps: >-
           {{
-            (pipelines[active_pipeline] | selectattr('step','in', only_steps) | list)
+            (_all_steps | selectattr('_id','in', only_steps) | list)
             if (only_steps is defined) else
-            (pipelines[active_pipeline][ _start_idx : ])
+            (_all_steps[ _start_idx : ])
           }}
       vars:
-        _names: "{{ pipelines[active_pipeline] | map(attribute='step') | list }}"
-        _start_idx: "{{ (_names.index(start_at)) if (start_at is defined and start_at in _names) else 0 }}"
+        _ids: "{{ _all_steps | map(attribute='_id') | list }}"
+        _start_idx: "{{ (_ids.index(start_at)) if (start_at is defined and start_at in _ids) else 0 }}"
 
-    - name: "Fail if start_at names a step not in the pipeline"
+    - name: "Fail if start_at names an id not in the pipeline"
       ansible.builtin.assert:
-        that: "start_at is not defined or start_at in (pipelines[active_pipeline] | map(attribute='step') | list)"
+        that: "start_at is not defined or start_at in (_all_steps | map(attribute='_id') | list)"
         fail_msg: >-
-          start_at='{{ start_at | default('') }}' is not a step in pipeline
-          '{{ active_pipeline }}'. Steps are:
-          {{ pipelines[active_pipeline] | map(attribute='step') | list }}
+          start_at='{{ start_at | default('') }}' is not a step id in pipeline
+          '{{ active_pipeline }}'. Step ids are:
+          {{ _all_steps | map(attribute='_id') | list }}
         quiet: true
 
     - name: "List steps and exit (list_steps=true)"
@@ -43,7 +60,7 @@
             msg: >-
               Pipeline '{{ active_pipeline }}'
               {{ '(filtered)' if (start_at is defined or only_steps is defined) else '(full)' }}:
-              {{ _steps | map(attribute='step') | list }}
+              {{ _steps | map(attribute='_id') | list }}
         - name: "Stop after listing"
           ansible.builtin.meta: end_play
 
