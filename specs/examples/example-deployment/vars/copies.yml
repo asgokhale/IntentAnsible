@@ -1,9 +1,10 @@
 ---
 # File-copy inputs for the copy_files role (USER DATA).
-# copy_base_dir: where your source files live ON THE CONTROL NODE.
-# Each named set is selected by a pipeline step via vars: { copy_set: <name> }.
-copy_base_dir: "specs/examples/example-deployment/files"   # adjust to your real path
+# In the pipeline you reference these BY NAME; the framework looks them up.
+# Give each copy operation a UNIQUELY named list so multiple copy steps never
+# collide. Each step can also name its own base dir.
+common_base_dir: "specs/examples/example-deployment/files"   # control-node source dir
 
 copy_common:
   - { src: "bash_aliases.example", dest: "/home/{{ remote_cloud_user }}/.bash_aliases" }
-  # add more entries; set template: true for files needing variable substitution
+  # set template: true on an entry whose file needs variable substitution

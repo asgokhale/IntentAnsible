@@ -197,6 +197,30 @@ When you port a new step that needs a user-supplied value, add `requires: [that_
 to its pipeline line -- do NOT add assert/guard tasks inside the role.
 
 
+## Passing parameters to a step (`vars:`)
+
+A step can hand parameters to its role via `vars:`. The uniform rule:
+**every value in `vars:` is the NAME of one of your variables -- the framework
+looks it up and passes the real value to the role.** You never write `{{ }}`
+in the pipeline; you just name your vars.
+
+    # pipeline (names only):
+    - { step: copy_files, target: "role:k8s_worker",
+        vars: { copy_set: my_bash_files, copy_base_dir: my_src_dir },
+        requires: [my_bash_files, my_src_dir] }
+
+    # your vars/ file (the real values):
+    my_src_dir: "/home/{{ local_user }}/files"
+    my_bash_files:
+      - { src: ".bash_aliases", dest: "/home/{{ remote_cloud_user }}/.bash_aliases" }
+
+Because each step names its OWN vars, you can invoke the same role many times
+with different inputs (e.g. several `copy_files` steps at different points, each
+naming a different list and base dir) with no collisions -- give each its own
+uniquely named vars. Roles receive plain values and need no lookup logic; the
+framework does that plumbing.
+
+
 ## Connection model (your ~/.ssh/config is never touched)
 
 Ansible reaches nodes self-contained, from the spec's `deploy_conn:` block. The

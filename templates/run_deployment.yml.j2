@@ -39,7 +39,9 @@
 {% if step.vars is defined %}
       vars:
 {% for k, v in step.vars.items() %}
-        {{ k }}: {{ v | to_json }}
+        # per-step vars are NAMES of your vars; the framework looks them up so
+        # roles receive real values (uniform rule: pipeline carries names only).
+        {{ k }}: "{{ '{{' }} lookup('vars', '{{ v }}') {{ '}}' }}"
 {% endfor %}
 {% endif %}
 {% if step.when_setup is defined %}
