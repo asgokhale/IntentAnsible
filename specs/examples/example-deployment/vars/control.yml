@@ -1,0 +1,5 @@
+---
+# Control-node + connection user settings (USER DATA -- edit these).
+local_user: REPLACE-YOUR-LOCAL-USERNAME   # your username on the control machine
+local_inventory: LocalNodes               # group name in local.ini (leave as-is)
+remote_cloud_user: REPLACE-SSH-USER       # default SSH user on the VMs (e.g. cc)

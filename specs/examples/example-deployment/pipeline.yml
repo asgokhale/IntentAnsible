@@ -25,6 +25,7 @@ pipelines:
     - { step: node_provision, target: local, when_setup: vm }
     # ===== CONFIGURATION =====
     - { step: apt_install,    target: "role:k8s_control_plane,k8s_worker,docker_registry", gather_facts: true, requires: [apt_packages] }
+    - { step: copy_files,   target: "role:k8s_control_plane,k8s_worker", vars: { copy_set: copy_common }, requires: [copy_common] }
     - { step: firewall,       target: "role:k8s_control_plane,k8s_worker", requires: [firewall_rules] }
     - { step: k8s_start,      target: "role:k8s_control_plane" }
     # ... add the rest of your converted child playbooks here, in order ...
@@ -34,6 +35,7 @@ pipelines:
   configure:
     # ===== CONFIGURATION =====
     - { step: apt_install,    target: "role:k8s_control_plane,k8s_worker,docker_registry", gather_facts: true, requires: [apt_packages] }
+    - { step: copy_files,   target: "role:k8s_control_plane,k8s_worker", vars: { copy_set: copy_common }, requires: [copy_common] }
     - { step: firewall,       target: "role:k8s_control_plane,k8s_worker", requires: [firewall_rules] }
     - { step: k8s_start,      target: "role:k8s_control_plane" }
 

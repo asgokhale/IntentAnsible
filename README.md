@@ -34,7 +34,7 @@ deployment by editing data, not by editing playbooks.
     tasks/                        spec validation + inventory building
     templates/                    generated-runner + generated-inventory templates
     specs/examples/               TEMPLATES (overwritten on update)
-      sample-deployment/            a COMPLETE example deployment to copy:
+      example-deployment/            a COMPLETE example deployment to copy:
         spec.yml                      nodes, connection, topology
         pipeline.yml                  ordered steps
         vars/                         per-role user data
@@ -59,24 +59,24 @@ only mechanism (engine, role logic) and `specs/examples/` templates.
 
     # one-time: create your deployment from the sample, then edit it
     git init && git add -A && git commit -m "baseline"
-    cp -r specs/examples/sample-deployment mydeployments/pangea
-    #   edit mydeployments/pangea/spec.yml      (bastion IP, keys, lease IDs, networks)
-    #   edit mydeployments/pangea/pipeline.yml  (your step order)
-    #   edit mydeployments/pangea/vars/*.yml    (control user, packages, firewall ports)
+    cp -r specs/examples/example-deployment mydeployments/foo
+    #   edit mydeployments/foo/spec.yml      (bastion IP, keys, lease IDs, networks)
+    #   edit mydeployments/foo/pipeline.yml  (your step order)
+    #   edit mydeployments/foo/vars/*.yml    (control user, packages, firewall ports)
 
     # provision only (first run): create VMs, write inventory, then STOP
-    ./deploy.sh --deployment mydeployments/pangea -i local.ini \
-        -e active_pipeline=provision_only -e inventory_out_dir=inv/pangea
+    ./deploy.sh --deployment mydeployments/foo -i local.ini \
+        -e active_pipeline=provision_only -e inventory_out_dir=inv/foo
 
-    #   -> inspect inv/pangea/hosts.yml: confirm captured IPs are the private
+    #   -> inspect inv/foo/hosts.yml: confirm captured IPs are the private
     #      addresses your configure steps expect.
 
     # configure later (reads the generated inventory; no cloud query)
-    ./deploy.sh --deployment mydeployments/pangea -i inv/pangea/hosts.yml \
+    ./deploy.sh --deployment mydeployments/foo -i inv/foo/hosts.yml \
         -e active_pipeline=configure
 
     # or, once trusted: provision + configure in one go
-    ./deploy.sh --deployment mydeployments/pangea -i local.ini \
+    ./deploy.sh --deployment mydeployments/foo -i local.ini \
         -e active_pipeline=full
 
 `--deployment <dir>` loads, in order: `spec.yml`, `pipeline.yml`, then
@@ -85,7 +85,7 @@ only mechanism (engine, role logic) and `specs/examples/` templates.
 
 Notes:
 - Everything under your deployment dir is YOUR data (gitignored). The committed
-  `specs/examples/sample-deployment/` is the template you copied from.
+  `specs/examples/example-deployment/` is the template you copied from.
 - Run from inside your OpenStack venv (the openstacksdk must match the
   openstack.cloud collection, or server creation fails with obscure errors).
 - `-i local.ini` points Ansible at the local control node for provisioning
@@ -110,7 +110,7 @@ Matching is by NAME only: if a VM exists but you changed its flavor/image in the
 spec, the existing one is left as-is. To replace specific nodes, force-recreate
 (delete + remake) them, leaving everything else reused:
 
-    ./deploy.sh --deployment mydeployments/pangea -i local.ini \
+    ./deploy.sh --deployment mydeployments/foo -i local.ini \
         -e active_pipeline=provision_only \
         -e 'force_recreate=["PG-WM3","PG-M1"]'
 
@@ -159,8 +159,8 @@ The bastion is just a node group with two extra fields:
       roles: [bastion]
       provision_order: 0             # created + reachable BEFORE all others
       floating_ip: 129.114.26.64     # claims THIS pre-allocated public IP
-      key: PangeaBastion             # openstack keypair NAME
-      networks: [PangeaNetwork]
+      key: example-bastion-keypair             # openstack keypair NAME
+      networks: [example-net]
       security_groups: [default, ENABLE_SSH]
       name_pattern: "PG-BASTION"
       shard_by: none
@@ -217,7 +217,7 @@ to a new directory and editing it -- nothing else changes.
 Everything in a deployment directory is YOUR data (gitignored): the spec
 (platform.cloud, deploy_conn, node_groups, topology), the pipeline (step order),
 and the role vars (control user, packages, firewall ports). The committed tree
-holds only the engine, the roles, and `specs/examples/sample-deployment/` as the
+holds only the engine, the roles, and `specs/examples/example-deployment/` as the
 template to copy.
 
 Bare metal differs structurally: `setup: bm` gates out provisioning (node

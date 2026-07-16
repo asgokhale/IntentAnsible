@@ -1,0 +1,34 @@
+---
+# Generic file-copy role. Driven entirely by DATA (no hardcoded paths):
+#   copy_base_dir : base directory on the CONTROL node for source files
+#   copy_set      : NAME of the list variable holding this step's copy entries
+#                   (passed as a per-step var, so different steps copy different
+#                    sets and can be interleaved anywhere in the pipeline)
+# Each entry in that list:
+#   src           : path RELATIVE to copy_base_dir
+#   dest          : absolute path on the remote node
+#   template      : optional bool; true -> Jinja-substitute the file (template),
+#                   false/absent -> byte-for-byte copy
+#   mode          : optional file mode (default 0644)
+- name: "Resolve the copy set '{{ copy_set }}'"
+  ansible.builtin.set_fact:
+    _copy_entries: "{{ lookup('vars', copy_set) }}"
+
+- name: "Copy static files (set: {{ copy_set }})"
+  ansible.builtin.copy:
+    src: "{{ copy_base_dir }}/{{ item.src }}"
+    dest: "{{ item.dest }}"
+    mode: "{{ item.mode | default('0644') }}"
+  loop: "{{ _copy_entries | rejectattr('template', 'defined') | list
+           + _copy_entries | selectattr('template', 'defined') | rejectattr('template') | list }}"
+  loop_control:
+    label: "{{ item.src }} -> {{ item.dest }}"
+
+- name: "Render templated files (set: {{ copy_set }})"
+  ansible.builtin.template:
+    src: "{{ copy_base_dir }}/{{ item.src }}"
+    dest: "{{ item.dest }}"
+    mode: "{{ item.mode | default('0644') }}"
+  loop: "{{ _copy_entries | selectattr('template', 'defined') | selectattr('template') | list }}"
+  loop_control:
+    label: "{{ item.src }} -> {{ item.dest }} (template)"

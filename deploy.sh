@@ -13,14 +13,14 @@
 #      Later files override earlier ones (standard Ansible -e precedence), so
 #      vars/ can override pipeline/spec if needed.
 #      Example:
-#        ./deploy.sh --deployment mydeployments/pangea -i local.ini \
+#        ./deploy.sh --deployment mydeployments/foo -i local.ini \
 #            -e active_pipeline=full
 #
 # 2. explicit -e @... flags   (full control; power users)
 #        ./deploy.sh -i local.ini \
-#            -e @mydeployments/pangea/spec.yml \
-#            -e @mydeployments/pangea/pipeline.yml \
-#            -e @mydeployments/pangea/vars/control.yml \
+#            -e @mydeployments/foo/spec.yml \
+#            -e @mydeployments/foo/pipeline.yml \
+#            -e @mydeployments/foo/vars/control.yml \
 #            -e active_pipeline=full
 #
 # Anything you pass besides --deployment is forwarded to ansible-playbook as-is,

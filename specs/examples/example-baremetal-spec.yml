@@ -19,7 +19,7 @@ platform:
   image: n/a
 
 deploy_conn:
-  remote_user: gokhale
+  remote_user: REPLACE-YOUR-USERNAME
   # no bastion block: these are directly reachable on the LAN
   default_node_key: ~/.ssh/id_rsa
   strict_host_key_checking: false

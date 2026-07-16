@@ -1,6 +1,7 @@
 ---
 # ============================================================================
-# GENERATED FILE -- do not edit. Source of truth: specs/<env>.yml + group_vars/all/pipelines.yml
+# GENERATED FILE -- do not edit. Source of truth: your deployment's spec.yml +
+# pipeline.yml (under mydeployments/<name>/, loaded via --deployment).
 # Regenerate with: ansible-playbook generate_runner.yml
 # Pipeline: {{ active_pipeline }}
 # ============================================================================
@@ -35,6 +36,12 @@
     - name: "run role {{ step.step }}"
       ansible.builtin.import_role:
         name: "{{ step.step }}"
+{% if step.vars is defined %}
+      vars:
+{% for k, v in step.vars.items() %}
+        {{ k }}: {{ v | to_json }}
+{% endfor %}
+{% endif %}
 {% if step.when_setup is defined %}
       when: setup == "{{ step.when_setup }}"
 {% endif %}

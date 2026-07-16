@@ -1,0 +1,65 @@
+---
+# =============================================================================
+# EXAMPLE deployment spec. Copy this whole directory to mydeployments/<name>/
+# and replace every REPLACE-... placeholder with your real values.
+#
+# This example: a small Kubernetes cluster on an OpenStack-style cloud
+# (Chameleon is one such cloud). Adjust node_groups for your own topology.
+# =============================================================================
+
+setup: vm                          # vm = provision on a cloud; bm = bare metal
+
+platform:
+  name: chameleon                  # gates platform-specific steps (e.g. firewalld)
+  cloud: REPLACE-CLOUD-NAME        # the cloud/project id in your clouds.yaml
+  zone: nova
+  image: REPLACE-IMAGE-NAME        # e.g. an Ubuntu image published by your cloud
+  vm_creation_limit: 10
+
+# How Ansible reaches the nodes (self-contained; your ~/.ssh/config is untouched).
+deploy_conn:
+  remote_user: REPLACE-SSH-USER    # default login user on the VMs (e.g. 'cc')
+  bastion:
+    host: REPLACE-BASTION-FLOATING-IP
+    user: REPLACE-SSH-USER
+    key: ~/.ssh/REPLACE-BASTION.pem
+  default_node_key: ~/.ssh/REPLACE-CLUSTER.pem
+  strict_host_key_checking: false
+
+topology:
+  clusters: 1
+
+node_groups:
+  # Bastion: created first (provision_order 0), gets a floating IP, is the jump
+  # host for all private nodes. SSH key auto-defaults from deploy_conn.bastion.key.
+  - name: bastion
+    count: 1
+    roles: [bastion]
+    provision_order: 0
+    floating_ip: REPLACE-BASTION-FLOATING-IP
+    flavor: REPLACE-FLAVOR-OR-LEASE-ID
+    key: REPLACE-KEYPAIR-NAME
+    networks: [REPLACE-NETWORK]
+    security_groups: [default, ENABLE_SSH]
+    name_pattern: "foo-BASTION"
+    shard_by: none
+
+  - name: cp                       # control plane
+    count: 1
+    roles: [k8s_control_plane]
+    flavor: REPLACE-FLAVOR-OR-LEASE-ID
+    key: REPLACE-KEYPAIR-NAME
+    networks: [REPLACE-NETWORK]
+    security_groups: [default, ENABLE_SSH]
+    name_pattern: "foo-M{role_i}"
+    shard_by: none
+
+  - name: workers
+    count: 3
+    roles: [k8s_worker]
+    flavor: REPLACE-FLAVOR-OR-LEASE-ID
+    key: REPLACE-KEYPAIR-NAME
+    networks: [REPLACE-NETWORK]
+    security_groups: [default, ENABLE_SSH]
+    name_pattern: "foo-W{role_i}"
+    shard_by: none
