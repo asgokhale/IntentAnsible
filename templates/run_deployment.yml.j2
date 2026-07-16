@@ -18,7 +18,7 @@
 
 # Phase B: one play per pipeline step (this is what lets each step target its
 # own hosts -- the thing a single looped play cannot do).
-{% for step in pipelines[active_pipeline] %}
+{% for step in _steps %}
 {% set tgt = step.target %}
 {% if tgt == 'local' %}
 {%   set pattern = local_inventory | default('LocalNodes') %}

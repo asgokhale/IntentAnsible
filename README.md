@@ -197,6 +197,26 @@ When you port a new step that needs a user-supplied value, add `requires: [that_
 to its pipeline line -- do NOT add assert/guard tasks inside the role.
 
 
+## Running part of a pipeline (`start_at` / `only_steps` / `list_steps`)
+
+For iterating or resuming, you can run a subset of the active pipeline:
+
+    -e start_at=apt_upgrade        # run from this step to the END (skip earlier)
+    -e 'only_steps=["apt_clean"]'  # run ONLY these steps
+    -e list_steps=true             # print the (filtered) steps and exit; generate nothing
+
+Example -- you already copied files, now resume at the upgrade:
+
+    ./deploy.sh --deployment mydeployments/foo -i inv/foo/hosts.yml \
+        -e active_pipeline=configure -e start_at=apt_upgrade
+
+IMPORTANT: start_at/only_steps do NOT check the requires: of skipped steps, and
+do NOT supply state that skipped steps would have produced. They assume the
+earlier steps already ran. Safe for independent steps (apt, copies); for steps
+that consume earlier steps' output (e.g. a k8s join token), don't skip the
+producer.
+
+
 ## Passing parameters to a step (`vars:`)
 
 A step can hand parameters to its role via `vars:`. The uniform rule:

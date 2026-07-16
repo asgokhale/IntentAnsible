@@ -1,17 +1,52 @@
 ---
-# Generates run_deployment.yml: ONE play per pipeline step, each with its target
-# as hosts:. This is the only codegen in the system.
+# Generates run_deployment.yml: ONE play per pipeline step.
 #
-# Also does PRE-FLIGHT validation: each step may declare `requires: [var, ...]`
-# naming the user-supplied vars it needs. Before generating anything, we check
-# ALL required vars for ALL steps in the active pipeline and report EVERY
-# missing one at once -- so users fix their inputs in a single pass instead of
-# discovering them one failed step at a time, mid-run.
+# STEP SELECTION (optional, for iterating / resuming):
+#   -e start_at=<step>      run from that step to the END (skip earlier ones)
+#   -e only_steps='["a","b"]'  run ONLY those steps (exact set)
+#   -e list_steps=true      just print the (filtered) steps and exit; generate nothing
+# Precedence: only_steps wins if both given. Neither -> full active pipeline.
+#
+# PRE-FLIGHT: each step may declare requires:[var,...]; we check the vars for the
+# EFFECTIVE (filtered) steps and report ALL missing at once before generating.
 - name: "Generate the deployment runner from the active pipeline"
   hosts: localhost
   connection: local
   gather_facts: no
   tasks:
+    - name: "Compute effective step list (apply start_at / only_steps)"
+      ansible.builtin.set_fact:
+        _steps: >-
+          {{
+            (pipelines[active_pipeline] | selectattr('step','in', only_steps) | list)
+            if (only_steps is defined) else
+            (pipelines[active_pipeline][ _start_idx : ])
+          }}
+      vars:
+        _names: "{{ pipelines[active_pipeline] | map(attribute='step') | list }}"
+        _start_idx: "{{ (_names.index(start_at)) if (start_at is defined and start_at in _names) else 0 }}"
+
+    - name: "Fail if start_at names a step not in the pipeline"
+      ansible.builtin.assert:
+        that: "start_at is not defined or start_at in (pipelines[active_pipeline] | map(attribute='step') | list)"
+        fail_msg: >-
+          start_at='{{ start_at | default('') }}' is not a step in pipeline
+          '{{ active_pipeline }}'. Steps are:
+          {{ pipelines[active_pipeline] | map(attribute='step') | list }}
+        quiet: true
+
+    - name: "List steps and exit (list_steps=true)"
+      when: list_steps | default(false) | bool
+      block:
+        - name: "Show effective steps"
+          ansible.builtin.debug:
+            msg: >-
+              Pipeline '{{ active_pipeline }}'
+              {{ '(filtered)' if (start_at is defined or only_steps is defined) else '(full)' }}:
+              {{ _steps | map(attribute='step') | list }}
+        - name: "Stop after listing"
+          ansible.builtin.meta: end_play
+
     - name: "Pre-flight: collect required vars that are missing/empty"
       ansible.builtin.set_fact:
         _missing_requires: >-
@@ -19,7 +54,7 @@
              + [ {'step': item.0.step, 'var': item.1} ]
              if (vars[item.1] is not defined or vars[item.1] | length == 0)
              else _missing_requires | default([]) }}
-      loop: "{{ pipelines[active_pipeline] | subelements('requires', skip_missing=True) }}"
+      loop: "{{ _steps | subelements('requires', skip_missing=True) }}"
       loop_control:
         label: "{{ item.0.step }} needs {{ item.1 }}"
 
@@ -28,7 +63,7 @@
         that: "_missing_requires | default([]) | length == 0"
         fail_msg: |-
           Your deployment is missing required inputs. Set each var below (copy the
-          matching file from specs/examples/sample-deployment/vars/ into your
+          matching file from specs/examples/example-deployment/vars/ into your
           deployment's vars/ directory, or pass with -e), then re-run:
           {% for m in _missing_requires | default([]) %}
             - step '{{ m.step }}' requires: {{ m.var }}
@@ -36,7 +71,7 @@
         success_msg: "Pre-flight OK: all required inputs present."
         quiet: true
 
-    - name: "Render run_deployment.yml"
+    - name: "Render run_deployment.yml (effective steps only)"
       ansible.builtin.template:
         src: templates/run_deployment.yml.j2
         dest: "{{ playbook_dir }}/run_deployment.yml"

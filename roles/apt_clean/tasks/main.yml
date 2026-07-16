@@ -1,0 +1,10 @@
+---
+# System hygiene: apt auto remove/purge and clean. No user
+# input -- identical on every node and every deployment, so no requires:.
+# Cloud images can be stale; running this before configuration is good practice.
+- name: "apt autoremove (with purge) and clean"
+  ansible.builtin.apt:
+    autoremove: true
+    purge: true
+    clean: true
+  become: true
