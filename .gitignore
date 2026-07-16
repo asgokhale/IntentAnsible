@@ -10,4 +10,5 @@ inv/*/hosts.yml
 # Editor / OS noise
 *.swp
 .DS_Store
+*~
 mydeployments/
