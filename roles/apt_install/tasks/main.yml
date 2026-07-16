@@ -1,9 +1,11 @@
 ---
-# Install apt packages from `apt_packages` (user data; declared as a `requires:`
-# on the pipeline step, so it's validated pre-flight -- no per-role guard needed).
+# Install apt packages from `apt_packages` (user data; declared via requires:
+# on the pipeline step, validated pre-flight -- no per-role guard needed).
+# No localhost guard needed: the pipeline targets role groups, not the control
+# node, so this only runs on real nodes.
 - name: "Install apt packages"
   ansible.builtin.apt:
-    name: "{{ item }}"
+    name: "{{ apt_packages }}"   # a list installs in ONE apt transaction (faster)
     state: latest
     update_cache: yes
-  loop: "{{ apt_packages }}"
+  become: true

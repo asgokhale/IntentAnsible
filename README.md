@@ -299,9 +299,10 @@ openstack idempotency/delete behavior under force-recreate.
 
 
 ## Not yet built (future work)
-- Real role bodies for most steps: only a few (apt_install, firewall,
-  node_provision) are filled in; the rest are stubs to paste your existing task
-  files into (mechanical -- a task file is already a role body).
+- Real role bodies: node_provision, apt_upgrade, reboot, apt_install, firewall,
+  and copy_files are implemented; remaining domain steps (docker, k8s, ...) are
+  ported the same mechanical way (paste task body into roles/<name>/tasks/main.yml,
+  add a pipeline line, add requires:/vars: if it needs inputs).
 - `vm_creation_limit` batching for large provisions (serial at the provision play).
 - OS/arch heterogeneity (per-OS vars inside roles, keyed on gathered facts).
 - Inter-step data passing (e.g. k8s join token from control plane to workers) --

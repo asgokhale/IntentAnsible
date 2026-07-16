@@ -1,0 +1,13 @@
+---
+# Provider-agnostic soft reboot: reboots the node over SSH and WAITS for it to
+# come back and become reachable again (through the bastion, if applicable)
+# before the pipeline continues. Works on any provider (OpenStack, CloudLab,
+# FABRIC, bare metal) because it runs on the node itself -- no cloud API.
+# No user input, so no requires:.
+- name: "Reboot node and wait for it to return"
+  ansible.builtin.reboot:
+    reboot_timeout: 600          # wait up to 10 min for SSH to come back
+    connect_timeout: 30
+    post_reboot_delay: 15        # settle time after reboot before reconnecting
+    test_command: "whoami"       # simple reachability probe once back
+  become: true
