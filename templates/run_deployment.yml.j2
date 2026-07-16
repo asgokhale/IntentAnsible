@@ -9,7 +9,8 @@
 # Phase A: build in-memory groups so role: targets resolve (and, after a
 # provision step, so newly created hosts are addressable in later plays).
 - name: "Resolve spec into host groups"
-  hosts: "{{ local_inventory | default('LocalNodes') }}"
+  hosts: localhost
+  connection: local
   gather_facts: no
   tasks:
     - import_tasks: tasks/validate_spec.yml

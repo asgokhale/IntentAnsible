@@ -8,7 +8,8 @@
 # missing one at once -- so users fix their inputs in a single pass instead of
 # discovering them one failed step at a time, mid-run.
 - name: "Generate the deployment runner from the active pipeline"
-  hosts: "{{ local_inventory | default('LocalNodes') }}"
+  hosts: localhost
+  connection: local
   gather_facts: no
   tasks:
     - name: "Pre-flight: collect required vars that are missing/empty"
