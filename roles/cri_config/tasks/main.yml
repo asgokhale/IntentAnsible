@@ -1,0 +1,68 @@
+---
+# ============================================================================
+# containerd (CRI) configuration -- done cleanly, version-stably.
+#
+# WHY THIS EXISTS: kubeadm requires (a) the systemd cgroup driver and (b)
+# containerd to know where to find per-registry configs. The legacy approach
+# ran `containerd config default > config.toml` then regex-patched the giant
+# generated file -- fragile, because that file's structure changes between
+# containerd versions (see the many dated workarounds in the original).
+#
+# CLEAN APPROACH (default): generate the default config ONCE, then set only the
+# two settings we care about with idempotent replacements. We do NOT hand-craft
+# the whole file. If a future containerd changes these key names, only these two
+# replace: tasks need updating -- not a wholesale rewrite.
+#
+# Restart is via a handler (fires once, only if something changed).
+# ============================================================================
+
+- name: "Check whether containerd config exists"
+  ansible.builtin.stat:
+    path: "{{ cri_config_path }}"
+  register: _ctr_cfg
+
+- name: "Generate default containerd config if missing"
+  ansible.builtin.shell:
+    cmd: "containerd config default > {{ cri_config_path }}"
+  become: true
+  when: not _ctr_cfg.stat.exists
+  notify: restart containerd
+
+- name: "Ensure containerd uses the systemd cgroup driver"
+  ansible.builtin.replace:
+    path: "{{ cri_config_path }}"
+    regexp: 'SystemdCgroup = false'
+    replace: 'SystemdCgroup = true'
+  become: true
+  when: cri_cgroup_systemd | bool
+  notify: restart containerd
+
+- name: "Point containerd registry config_path at certs.d (single path, no docker certs.d)"
+  # The legacy default sometimes generates a DUAL path
+  # '/etc/containerd/certs.d:/etc/docker/certs.d' which caused an https/http
+  # mismatch pulling from the insecure registry. Collapse to just certs.d.
+  ansible.builtin.replace:
+    path: "{{ cri_config_path }}"
+    regexp: "config_path\\s*=\\s*'/etc/containerd/certs.d:/etc/docker/certs.d'"
+    replace: "config_path = '{{ cri_registry_config_path }}'"
+  become: true
+  notify: restart containerd
+
+- name: "Ensure config_path is set even if it was empty ('')"
+  # Fallback for containerd versions that emit config_path = '' in the registry
+  # section. Only touches the empty form; harmless if the above already matched.
+  ansible.builtin.replace:
+    path: "{{ cri_config_path }}"
+    after: "\\[plugins.'io.containerd.cri.v1.images'.registry\\]"
+    before: "\\[plugins.'io.containerd.cri.v1.images'.image_decryption\\]"
+    regexp: "config_path\\s*=\\s*''"
+    replace: "config_path = '{{ cri_registry_config_path }}'"
+  become: true
+  notify: restart containerd
+
+- name: "Ensure the certs.d directory exists"
+  ansible.builtin.file:
+    path: "{{ cri_registry_config_path }}"
+    state: directory
+    mode: '0755'
+  become: true

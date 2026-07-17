@@ -1,0 +1,26 @@
+---
+# Apply Flannel to the cluster. Runs on the primary control-plane only.
+# CNI-specific quirks live HERE, not in k8s_init.
+- name: "Identify the primary control-plane node"
+  ansible.builtin.set_fact:
+    _is_primary: "{{ inventory_hostname == (groups['k8s_control_plane'] | sort | first) }}"
+
+- name: "Download the flannel manifest"
+  ansible.builtin.get_url:
+    url: "{{ flannel_manifest_url }}"
+    dest: "/home/{{ remote_cloud_user }}/flannel.yaml"
+    mode: '0644'
+  when: _is_primary | bool
+
+- name: "Apply flannel to the cluster"
+  kubernetes.core.k8s:
+    state: present
+    src: "/home/{{ remote_cloud_user }}/flannel.yaml"
+    kubeconfig: "/home/{{ remote_cloud_user }}/.kube/config"
+  when: _is_primary | bool
+
+- name: "Remove the downloaded flannel manifest"
+  ansible.builtin.file:
+    path: "/home/{{ remote_cloud_user }}/flannel.yaml"
+    state: absent
+  when: _is_primary | bool

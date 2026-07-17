@@ -1,0 +1,9 @@
+---
+calico_version: "3.28.0"
+# ENCAPSULATION: key knob for VM clusters. VXLAN for cloud VMs; IPIP/none on
+# bare metal. Iterate here if Calico-on-VM pods can't cross nodes.
+calico_encapsulation: "VXLAN"
+# pod cidr comes from the central cni_params.calico.pod_cidr, referenced here
+calico_pod_cidr: "192.168.0.0/16"
+calico_operator_url: "https://raw.githubusercontent.com/projectcalico/calico/v{{ calico_version }}/manifests/tigera-operator.yaml"
+calico_resources_url: "https://raw.githubusercontent.com/projectcalico/calico/v{{ calico_version }}/manifests/custom-resources.yaml"

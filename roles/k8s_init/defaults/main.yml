@@ -1,0 +1,33 @@
+---
+# ============================================================================
+# CNI selection + per-CNI init parameters, in ONE place.
+# The user picks a CNI with a single var:   cni: flannel   (or canal/calico/cilium)
+# k8s_init looks up cni_params[cni] to get that CNI's kubeadm-init requirements,
+# so there is NO 'when: cni == ...' branching anywhere. Adding a CNI = adding an
+# entry here plus a cni_<name> apply-role.
+# ============================================================================
+cni: flannel        # default CNI; override in your deployment vars
+
+k8s_service_cidr: "10.96.0.0/12"
+
+cni_params:
+  flannel:
+    pod_cidr: "10.244.0.0/16"
+    skip_phases: ""
+    advertise_apiserver: true
+    set_control_endpoint: true
+  canal:
+    pod_cidr: "10.244.0.0/16"
+    skip_phases: ""
+    advertise_apiserver: true
+    set_control_endpoint: true
+  calico:
+    pod_cidr: "192.168.0.0/16"
+    skip_phases: ""
+    advertise_apiserver: false     # Calico's documented quirk on VM setups
+    set_control_endpoint: false
+  cilium:
+    pod_cidr: "10.0.0.0/8"
+    skip_phases: "--skip-phases=addon/kube-proxy"
+    advertise_apiserver: true
+    set_control_endpoint: true

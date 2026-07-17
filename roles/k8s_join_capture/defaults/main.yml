@@ -1,0 +1,5 @@
+---
+# Where the join command is stashed ON THE CONTROL NODE (disk-backed state).
+# Persists across runs so workers can join later. Tokens expire (~24h); this
+# role regenerates each run (cheap), avoiding expiry surprises.
+k8s_state_dir: "inv/{{ deployment_name | default('default') }}/state"

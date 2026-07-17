@@ -1,0 +1,37 @@
+---
+# ============================================================================
+# Capture the `kubeadm join` command from the primary control-plane and stash
+# it on the CONTROL node under a disk-backed state dir, so worker nodes (which
+# cannot talk to the master directly in Ansible's star model) can read it.
+#
+# Replaces the legacy write-file / fetch-down / copy-up dance with a single
+# registered value written once to control-node state. Regenerates the token
+# each run (cheap, avoids expiry surprises).
+# ============================================================================
+- name: "Identify the primary control-plane node"
+  ansible.builtin.set_fact:
+    _is_primary: "{{ inventory_hostname == (groups['k8s_control_plane'] | sort | first) }}"
+
+- name: "Generate a fresh join command on the primary master"
+  ansible.builtin.shell:
+    cmd: "kubeadm token create --print-join-command"
+  register: _join_cmd
+  become: true
+  changed_when: false
+  when: _is_primary | bool
+
+- name: "Ensure state dir exists on the control node"
+  ansible.builtin.file:
+    path: "{{ k8s_state_dir }}"
+    state: directory
+    mode: '0700'
+  delegate_to: localhost
+  run_once: true
+
+- name: "Write the join command to control-node state"
+  ansible.builtin.copy:
+    dest: "{{ k8s_state_dir }}/join_command.sh"
+    content: "#!/bin/sh\n{{ _join_cmd.stdout }}\n"
+    mode: '0700'
+  delegate_to: localhost
+  when: _is_primary | bool

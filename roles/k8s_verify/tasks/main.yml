@@ -1,0 +1,23 @@
+---
+# Verify the cluster: wait for all nodes to reach Ready. Runs on primary master.
+# Reports clearly; fails if nodes don't become Ready within the timeout.
+- name: "Identify the primary control-plane node"
+  ansible.builtin.set_fact:
+    _is_primary: "{{ inventory_hostname == (groups['k8s_control_plane'] | sort | first) }}"
+
+- name: "Wait for all nodes to be Ready"
+  ansible.builtin.shell:
+    cmd: "kubectl get nodes --no-headers"
+  environment:
+    KUBECONFIG: "/home/{{ remote_cloud_user }}/.kube/config"
+  register: _nodes
+  until: _nodes.stdout_lines | length > 0 and (_nodes.stdout_lines | select('search', ' NotReady ') | list | length == 0)
+  retries: 30
+  delay: 10
+  changed_when: false
+  when: _is_primary | bool
+
+- name: "Show final node status"
+  ansible.builtin.debug:
+    msg: "{{ _nodes.stdout_lines }}"
+  when: _is_primary | bool and _nodes.stdout_lines is defined

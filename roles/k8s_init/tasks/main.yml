@@ -1,0 +1,54 @@
+---
+# CNI-AGNOSTIC kubeadm init on the primary control-plane.
+# Reads this CNI's requirements from cni_params[cni] -- no branching.
+# Single-cluster: the one control-plane node is the cluster. ("who is primary"
+# is the seam to generalize for multi-cluster later.)
+- name: "Select this CNI's init parameters"
+  ansible.builtin.set_fact:
+    _cp: "{{ cni_params[cni] }}"
+
+- name: "Identify the primary control-plane node"
+  ansible.builtin.set_fact:
+    _is_primary: "{{ inventory_hostname == (groups['k8s_control_plane'] | sort | first) }}"
+
+- name: "Assemble the kubeadm init command"
+  ansible.builtin.set_fact:
+    _kubeadm_init_cmd: >-
+      kubeadm init
+      {{ ('--apiserver-advertise-address ' ~ ansible_facts.default_ipv4.address) if _cp.advertise_apiserver else '' }}
+      {{ ('--control-plane-endpoint ' ~ ansible_facts.default_ipv4.address) if _cp.set_control_endpoint else '' }}
+      --service-cidr {{ k8s_service_cidr }}
+      --pod-network-cidr={{ _cp.pod_cidr }}
+      {{ _cp.skip_phases }}
+
+- name: "Show the kubeadm init command"
+  ansible.builtin.debug:
+    msg: "{{ _kubeadm_init_cmd }}"
+  when: _is_primary | bool
+
+- name: "Run kubeadm init on the primary control-plane"
+  ansible.builtin.shell:
+    cmd: "{{ _kubeadm_init_cmd }}"
+    chdir: "/home/{{ remote_cloud_user }}"
+    creates: /etc/kubernetes/admin.conf
+  become: true
+  when: _is_primary | bool
+
+- name: "Create ~/.kube directory"
+  ansible.builtin.file:
+    path: "/home/{{ remote_cloud_user }}/.kube"
+    state: directory
+    owner: "{{ remote_cloud_user }}"
+    group: "{{ remote_cloud_user }}"
+  become: true
+  when: _is_primary | bool
+
+- name: "Install kubeconfig for the cluster user"
+  ansible.builtin.copy:
+    src: /etc/kubernetes/admin.conf
+    dest: "/home/{{ remote_cloud_user }}/.kube/config"
+    remote_src: true
+    owner: "{{ remote_cloud_user }}"
+    group: "{{ remote_cloud_user }}"
+  become: true
+  when: _is_primary | bool

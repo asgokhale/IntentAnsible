@@ -1,0 +1,3 @@
+---
+cilium_version: "1.16.1"
+cilium_helm_repo: "https://helm.cilium.io/"

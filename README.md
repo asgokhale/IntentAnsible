@@ -343,3 +343,39 @@ openstack idempotency/delete behavior under force-recreate.
 - OS/arch heterogeneity (per-OS vars inside roles, keyed on gathered facts).
 - Inter-step data passing (e.g. k8s join token from control plane to workers) --
   solved per-role when you flesh out the real bodies, not by the framework.
+
+
+## Kubernetes cluster bring-up
+
+The k8s stack is split into clean, single-purpose roles so nothing is tangled:
+
+Runtime foundation:
+- `cri_config` -- configures containerd (systemd cgroup driver; registry
+  config_path -> certs.d). Restart via handler (once, on change).
+- `registry_trust` -- tells containerd on every cluster node to pull from your
+  private registry. The registry address is DISCOVERED from the inventory
+  (the docker_registry group's IP) -- nothing hardcoded.
+
+Cluster formation (CNI-agnostic):
+- `k8s_init` -- runs `kubeadm init` on the primary control-plane. It reads this
+  cluster's CNI requirements from a central table `cni_params[cni]`, so there is
+  NO per-CNI branching. Pick a CNI with a single var: `cni: flannel`.
+- `k8s_join_capture` -- captures the join command to disk-backed state on the
+  control node (inv/<name>/state/). Workers read it from there -- replaces the
+  legacy fetch-down/copy-up file dance.
+- `k8s_join_workers` -- each worker runs the captured join command.
+- `k8s_verify` -- waits for all nodes to reach Ready.
+
+Pluggable CNI (apply-only roles): `cni_flannel`, `cni_canal`, `cni_calico`,
+`cni_cilium`. Swap ONE pipeline line to change CNI. Set `cni:` to match.
+Status: flannel and canal are known-good; calico and cilium are provided but
+UNVERIFIED on VM clusters (calico: iterate on `calico_encapsulation`, VXLAN for
+cloud VMs; cilium: never verified historically).
+
+Adding a CNI later = one entry in `cni_params` (in k8s_init/defaults) + one
+`cni_<name>` apply-role. The init step never changes.
+
+Multi-cluster note: the current roles assume a single cluster (all control-plane
+nodes form it, all workers join). The "which cluster is this node in" decision is
+isolated to the primary-node selection -- the seam to generalize for multi-cluster
+(C1/C2 naming, per-cluster CIDR slicing) later.

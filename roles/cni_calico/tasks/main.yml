@@ -1,0 +1,38 @@
+---
+# Apply Calico via the tigera operator. Primary control-plane only.
+# NOTE: UNVERIFIED on VM-based clusters. If pods can't reach each other across
+# nodes, the usual cause is ENCAPSULATION -- try calico_encapsulation: VXLAN
+# (cloud VMs) instead of the default IPIP. This is the knob to iterate on.
+- name: "Identify the primary control-plane node"
+  ansible.builtin.set_fact:
+    _is_primary: "{{ inventory_hostname == (groups['k8s_control_plane'] | sort | first) }}"
+- name: "Install the Calico operator"
+  kubernetes.core.k8s:
+    state: present
+    src: "{{ calico_operator_url }}"
+    kubeconfig: "/home/{{ remote_cloud_user }}/.kube/config"
+  when: _is_primary | bool
+- name: "Fetch Calico custom-resources manifest"
+  ansible.builtin.get_url:
+    url: "{{ calico_resources_url }}"
+    dest: "/home/{{ remote_cloud_user }}/calico-resources.yaml"
+    mode: '0644'
+  when: _is_primary | bool
+- name: "Set pod CIDR in custom-resources"
+  ansible.builtin.replace:
+    path: "/home/{{ remote_cloud_user }}/calico-resources.yaml"
+    regexp: '(\s*)cidr: 192\.168\.0\.0/16'
+    replace: '\1cidr: {{ calico_pod_cidr }}'
+  when: _is_primary | bool
+- name: "Set encapsulation in custom-resources (KEY knob for VM clusters)"
+  ansible.builtin.replace:
+    path: "/home/{{ remote_cloud_user }}/calico-resources.yaml"
+    regexp: '(\s*)encapsulation: \w+'
+    replace: '\1encapsulation: {{ calico_encapsulation }}'
+  when: _is_primary | bool
+- name: "Apply Calico custom-resources"
+  kubernetes.core.k8s:
+    state: present
+    src: "/home/{{ remote_cloud_user }}/calico-resources.yaml"
+    kubeconfig: "/home/{{ remote_cloud_user }}/.kube/config"
+  when: _is_primary | bool

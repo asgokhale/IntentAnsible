@@ -1,0 +1,10 @@
+---
+# containerd configuration defaults. Overridable per deployment if needed.
+# cgroup driver MUST be systemd to match kubeadm's default, or the cluster
+# silently fails to come up (kubelet <-> containerd cgroup mismatch).
+cri_cgroup_systemd: true
+# Where containerd looks for per-registry host configs (certs.d). The
+# registry_trust role writes hosts.toml files under here.
+cri_registry_config_path: /etc/containerd/certs.d
+# Path to containerd's main config.
+cri_config_path: /etc/containerd/config.toml

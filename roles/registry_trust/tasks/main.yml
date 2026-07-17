@@ -1,0 +1,50 @@
+---
+# ============================================================================
+# Configure containerd to trust the insecure private registry so Kubernetes
+# can pull images from it. Runs on all cluster nodes (they all pull).
+#
+# For each registry node (discovered from the {{ registry_group }} inventory
+# group by its address), we create:
+#     /etc/containerd/certs.d/<registry-addr>:<port>/hosts.toml
+# describing the registry as an insecure (http) endpoint with pull/resolve/push.
+#
+# This is the containerd-2.x certs.d mechanism (replaces the old config.toml
+# registry.mirrors surgery). Address comes from the inventory, not hardcoded.
+# ============================================================================
+
+- name: "Resolve registry endpoints from the inventory group"
+  ansible.builtin.set_fact:
+    _registry_endpoints: >-
+      {{ groups[registry_group] | default([])
+         | map('extract', hostvars, 'ansible_host')
+         | select('defined') | list }}
+
+- name: "Fail clearly if no registry nodes found"
+  ansible.builtin.assert:
+    that: "_registry_endpoints | length > 0"
+    fail_msg: >-
+      No registry hosts found in inventory group '{{ registry_group }}'. Ensure
+      your spec has a node group with role '{{ registry_group }}' and it was
+      provisioned (so its address is in the generated inventory).
+    quiet: true
+
+- name: "Create certs.d directory per registry endpoint"
+  ansible.builtin.file:
+    path: "{{ registry_certs_dir }}/{{ item }}:{{ registry_port }}"
+    state: directory
+    mode: '0755'
+  become: true
+  loop: "{{ _registry_endpoints }}"
+
+- name: "Write hosts.toml (insecure http) per registry endpoint"
+  ansible.builtin.copy:
+    dest: "{{ registry_certs_dir }}/{{ item }}:{{ registry_port }}/hosts.toml"
+    mode: '0644'
+    content: |
+      server = "http://{{ item }}:{{ registry_port }}"
+
+      [host."http://{{ item }}:{{ registry_port }}"]
+          capabilities = ["pull", "resolve", "push"]
+  become: true
+  loop: "{{ _registry_endpoints }}"
+  notify: restart containerd

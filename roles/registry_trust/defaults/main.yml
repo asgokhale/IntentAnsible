@@ -1,0 +1,12 @@
+---
+# Private registry trust for containerd (so k8s can PULL from your insecure
+# private registry running on the docker_registry node(s)).
+#
+# registry_port: the port your registry:latest container listens on.
+registry_port: 5000
+# registry_group: the inventory group whose hosts run the registry. The role
+# reads each registry node's address from the inventory (discovered private IP),
+# so nothing is hardcoded. Defaults to the docker_registry role group.
+registry_group: docker_registry
+# certs.d base (must match cri_config's cri_registry_config_path).
+registry_certs_dir: /etc/containerd/certs.d

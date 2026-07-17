@@ -1,0 +1,20 @@
+---
+# Install Cilium via Helm. Primary control-plane only.
+# NOTE: UNVERIFIED. Cilium+kube-proxy-replacement needs k8sServiceHost/Port set;
+# if it fails to come up, that (and the API server reachability) is where to dig.
+- name: "Identify the primary control-plane node"
+  ansible.builtin.set_fact:
+    _is_primary: "{{ inventory_hostname == (groups['k8s_control_plane'] | sort | first) }}"
+- name: "Add the Cilium Helm repo"
+  kubernetes.core.helm_repository:
+    name: cilium
+    repo_url: "{{ cilium_helm_repo }}"
+  when: _is_primary | bool
+- name: "Install Cilium via Helm"
+  kubernetes.core.helm:
+    name: cilium
+    chart_ref: cilium/cilium
+    chart_version: "{{ cilium_version }}"
+    release_namespace: kube-system
+    kubeconfig: "/home/{{ remote_cloud_user }}/.kube/config"
+  when: _is_primary | bool

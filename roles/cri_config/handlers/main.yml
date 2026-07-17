@@ -1,0 +1,9 @@
+---
+# Restart containerd ONCE, at the end, only if a config task changed something.
+# Replaces the scattered imperative restart steps from the legacy playbooks.
+- name: restart containerd
+  ansible.builtin.systemd:
+    name: containerd
+    daemon_reload: true
+    state: restarted
+  become: true

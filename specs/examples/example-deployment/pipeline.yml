@@ -43,5 +43,18 @@ pipelines:
     - { step: firewall,       target: "role:k8s_control_plane,k8s_worker", requires: [firewall_rules] }
     - { step: k8s_start,      target: "role:k8s_control_plane" }
 
+  # ---- full Kubernetes cluster bring-up (foundation + flannel) ----
+  k8s_cluster:
+    # Runtime foundation
+    - { step: cri_config,       target: "role:k8s_control_plane,k8s_worker" }
+    - { step: registry_trust,   target: "role:k8s_control_plane,k8s_worker" }
+    # Cluster formation (k8s_init reads cni_params[cni]; set `cni:` in your vars)
+    - { step: k8s_init,         target: "role:k8s_control_plane", gather_facts: true }
+    - { step: k8s_join_capture, target: "role:k8s_control_plane" }
+    - { step: k8s_join_workers, target: "role:k8s_worker" }
+    # Apply the chosen CNI (swap this line for cni_canal / cni_calico / cni_cilium)
+    - { step: cni_flannel,      target: "role:k8s_control_plane" }
+    - { step: k8s_verify,       target: "role:k8s_control_plane" }
+
 # Default if not overridden on CLI with -e active_pipeline=...
 active_pipeline: full

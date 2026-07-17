@@ -1,0 +1,17 @@
+---
+# ============================================================================
+# Each worker joins the cluster by running the join command captured on the
+# control node by k8s_join_capture. The command file is read from control-node
+# state and executed on the worker. Idempotent: skips if already joined.
+# ============================================================================
+- name: "Read the captured join command from control-node state"
+  ansible.builtin.set_fact:
+    _join_command: "{{ lookup('file', k8s_state_dir ~ '/join_command.sh') }}"
+  vars:
+    k8s_state_dir: "inv/{{ deployment_name | default('default') }}/state"
+
+- name: "Join this worker to the cluster"
+  ansible.builtin.shell:
+    cmd: "{{ _join_command }}"
+    creates: /etc/kubernetes/kubelet.conf   # idempotent: already joined -> skip
+  become: true
