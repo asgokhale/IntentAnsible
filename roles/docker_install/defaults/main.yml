@@ -1,0 +1,33 @@
+# Some variables that are dictated by Docker's installation instructions
+# and are not something that the user supplies.
+docker_dependencies:
+  - ca-certificates  
+  - curl
+  # these are from earlier versions
+  - gnupg
+  - lsb-release
+  
+docker_unofficial_pkgs:
+  - docker.io
+  - docker-compose
+  - docker-compose-v2
+  - docker-doc
+  - podman-docker
+  - containerd
+  - runc
+  # were added these as these are the ones that now get installed (Fall 2023).
+  - docker-ce
+  - docker-ce-cli
+  - containerd.io
+  - docker-buildx-plugin
+  - docker-compose-plugin
+
+docker_official_pkgs:
+  - docker-ce
+  - docker-ce-cli
+  - containerd.io
+  - docker-buildx-plugin
+  - docker-compose-plugin
+
+docker_pip_pkgs:
+  - docker

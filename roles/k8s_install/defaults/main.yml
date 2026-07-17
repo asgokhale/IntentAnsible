@@ -1,0 +1,14 @@
+#
+k8s_dependencies:
+  - apt-transport-https
+  - ca-certificates
+  - curl
+  - gpg
+
+k8s_pkgs:
+  - kubeadm
+  - kubelet
+  - kubectl
+
+k8s_pip_pkgs:
+  - kubernetes

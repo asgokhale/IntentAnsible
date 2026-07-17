@@ -1,0 +1,143 @@
+---
+#
+# In this playbook we install Kubernetes
+#
+# Current modifications based on instructions found at https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/install-kubeadm/
+#
+# This may be coupled to Ubuntu; maybe also installs on Debian-based OS
+
+# uninstall any older version of Kubernetes
+  - name: "Unhold and uninstall any older version of Kubernetes"
+    ansible.builtin.apt:
+      name: "{{ k8s_pkgs }}"
+      state: absent
+      allow_change_held_packages: true   # to unhold a held package
+      purge: true
+    become: true # done per task now
+
+
+# Delete the kubernetes.list file.
+# We use the brute force approach.
+  - name: "Remove older version of kubernetes.list file, if any"
+    ansible.builtin.file:
+      path: /etc/apt/sources.list.d/kubernetes.list  # This is the new location
+                                                     # and extension
+      state: absent
+    become: true # done per task now
+
+# delete any older version of gpg, if we have one.
+  - name: "Remove older version of K8s GPG apt key, if any"
+    ansible.builtin.file:
+      path: /etc/apt/keyrings/kubernetes-apt-keyring.gpg  # This is the new location
+                                                          # and extension
+      state: absent
+    become: true # done per task now
+
+# The following iptables stuff is mentioned at https://kubernetes.io/docs/setup/production-environment/container-runtimes/
+#
+# This is no longer mentioned in the documentation
+# ensure that iptables see bridged traffic
+# But I guess it is needed (as students mentioned)
+  - name: "Load br_netfilter"
+    community.general.modprobe:
+      name: br_netfilter
+      state: present
+    become: true
+
+# This is no longer mentioned in the documentation
+  - name: "Remove old version of sysctl k8s.conf"
+    ansible.builtin.file:
+      path: /etc/sysctl.d/k8s.conf
+      state: absent
+    become: true # done per task now
+
+# Set IPv4 forwarding
+  - name: "Set IPv4 forwarding"
+    ansible.builtin.shell: |
+      cat <<EOF | tee /etc/sysctl.d/k8s.conf
+      net.ipv4.ip_forward = 1
+      EOF
+      sysctl --system
+    become: true # done per task now
+
+# install pre requisite packages for Kubernetes. Some of these may already be there
+# and/or gotten installed when installing Docker
+  - name: "Install a variety of pre-reqs for Kubernetes"
+    ansible.builtin.apt:
+      name: "{{ k8s_dependencies }}"
+      state: latest
+      update_cache: yes    # basically do a apt-get update
+    become: true # done per task now
+
+# Create the keyrings dir /etc/apt/keyrings. In newer Ubuntu releases
+# this directory is supposed to exist by default.
+#
+# This part is also newer compared to previous years
+# This does the step "sudo install -m 0755 -d /etc/apt/keyrings"
+  - name: "Create keyrings dir, if not present"
+    ansible.builtin.file:
+      path: /etc/apt/keyrings
+      state: directory  # creates dir if not present else sort of no-op
+      mode: '0755'
+    become: true # done per task now
+      
+
+ # Since the apt_key module is deprecated, we have to use a convoluted
+ # approach using get_url and running the gpg command
+ # via the builtin shell
+ # Now add the new gpg key using get_url as apt_key is gone
+  - name: "Fetch Kubernetes GPG apt key into temp location"
+    ansible.builtin.get_url:
+      url: https://pkgs.k8s.io/core:/stable:/{{ k8s_version }}/deb/Release.key
+      dest: /tmp/k8s.gpg
+      force: true  # overwrite prev file
+      
+  - name: "Run gpg command on downloaded key"
+    ansible.builtin.shell:
+      cmd: "gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg /tmp/k8s.gpg"
+    become: true
+      
+  - name: "Change permission on gpg file to 0644"
+    ansible.builtin.file:
+      path: /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+      mode: "0644"
+    become: true
+      
+  - name: "Delete temporarily downloaded gpg key"
+    ansible.builtin.file:
+      path: /tmp/k8s.gpg
+      state: absent
+    become: true
+      
+# Now add the repository (this has changed over the years)
+  - name: "Add kubernetes package repository with signed gpg"
+    ansible.builtin.apt_repository:
+      repo: "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/{{ k8s_version }}/deb/ /"
+      state: present
+      filename: kubernetes
+    become: true # done per task now
+
+# now install Kubernetes
+  - name: "Now install Kubernetes"
+    ansible.builtin.apt:
+      name: "{{ k8s_pkgs }}"
+      state: present
+      update_cache: yes
+    become: true # done per task now
+
+# the web site suggests holding the packages to this version
+  - name: "Hold packages to the current versions"
+    ansible.builtin.dpkg_selections:
+      name: "{{ item }}"
+      selection: hold
+    loop: "{{ k8s_pkgs }}"
+    become: true # done per task now
+
+# install kubernetes python package
+  - name: "Install kubernetes package via pip3"
+    pip:
+      name: "{{ k8s_pip_pkgs }}"
+      state: latest
+      virtualenv: "{{ venv_dir }}"  # will create if it does not exist
+      virtualenv_site_packages: false # do not inherit packages from global site
+...
