@@ -430,3 +430,33 @@ Run any phase alone (`-e active_pipeline=configure`) or all of them
 normal steps, and an unknown include name fails immediately with a clear error.
 Selecting a pipeline name that doesn't exist also fails with the list of
 available pipelines.
+
+
+## Persistent volume for the registry (optional)
+
+For a registry node with small root disk, attach a persistent volume and move
+docker's storage onto it. Two decoupled roles:
+
+- `volume_provision` -- NEUTRAL name; creates + attaches the volume. The
+  provider mechanics live behind a `platform.name` dispatch (today: chameleon/
+  OpenStack via tasks/openstack.yml). Adding a provider = add tasks/<provider>.yml;
+  pipelines still just say `volume_provision`. User vars: `volume_size_gb`
+  (required, e.g. 200), optional `volume_type` (ceph-hdd/ceph-ssd).
+- `volume_mount` -- GENERIC (no cloud API): safely partitions/formats/mounts the
+  attached device and points docker's data-root at it. User vars:
+  `volume_mount_name` (dir under /mnt), `volume_size_gb` (a loose size sanity
+  check). The device is AUTO-DETECTED as the single unpartitioned, non-root,
+  non-removable disk (you can't know the device name in advance -- it's created
+  during the run), then verified to be ~the expected size (GB/GiB-agnostic).
+  SAFETY: refuses unless exactly one such empty disk is found. A re-run over an
+  already-formatted volume finds ZERO empty disks (it now has a partition) and
+  reports nothing to do -- your data is never wiped. Override: `volume_force=true`
+  + `volume_device`.
+  The docker daemon.json write MERGES (keeps insecure-registries, adds data-root).
+
+Example pipeline (registry node only), run BEFORE registry_start:
+
+    - { step: volume_provision, target: "local" }
+    - { step: volume_mount,     target: "role:docker_registry", gather_facts: true }
+
+Needs collections: community.general (parted/filesystem), ansible.posix (mount).

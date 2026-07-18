@@ -1,0 +1,9 @@
+---
+# Volume provisioning (create + attach). NEUTRAL role name; the provider-specific
+# implementation is dispatched by platform.name (mirrors node_provision).
+# USER supplies (in vars): volume_size_gb, and optionally volume_type / name.
+volume_name: "{{ (platform.cloud | default('vol')) ~ '-registry-vol' }}"
+volume_type: "ceph-hdd"           # Chameleon KVM: ceph-hdd or ceph-ssd
+# volume_size_gb: 200             # REQUIRED from user (no sensible default)
+# The inventory group whose node the volume attaches to (the registry).
+volume_attach_group: docker_registry

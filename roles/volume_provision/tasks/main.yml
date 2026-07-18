@@ -1,0 +1,34 @@
+---
+# ============================================================================
+# volume_provision -- create a persistent volume and attach it to the registry
+# node. NEUTRAL name: the intent is "get me a volume attached to my registry".
+# The concrete mechanics live in a per-platform task file, dispatched below by
+# platform.name -- exactly like node_provision. Today only 'chameleon'
+# (OpenStack) is implemented; adding a provider = add tasks/<provider>.yml and
+# an entry here, with NO change to pipelines (they just say `volume_provision`).
+# ============================================================================
+- name: "Require volume_size_gb to be set"
+  ansible.builtin.assert:
+    that:
+      - "volume_size_gb is defined"
+      - "volume_size_gb | int > 0"
+    fail_msg: "volume_provision needs volume_size_gb (e.g. 200). Set it in your vars."
+    quiet: true
+
+- name: "Dispatch to the platform-specific volume implementation"
+  ansible.builtin.include_tasks: "{{ _impl }}"
+  vars:
+    _supported:
+      chameleon: openstack.yml
+      openstack: openstack.yml
+    _impl: "{{ _supported[platform.name] | default('') }}"
+  when: _impl | length > 0
+
+- name: "Fail clearly on an unsupported platform"
+  ansible.builtin.assert:
+    that: "platform.name in ['chameleon', 'openstack']"
+    fail_msg: >-
+      volume_provision currently supports platform 'chameleon' (OpenStack).
+      Got platform.name='{{ platform.name | default('undefined') }}'. Add a
+      tasks/<provider>.yml implementation to support another provider.
+    quiet: true

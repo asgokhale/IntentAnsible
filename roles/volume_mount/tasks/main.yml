@@ -1,0 +1,139 @@
+---
+# ============================================================================
+# Safely turn an attached raw volume into a mounted filesystem and (optionally)
+# move docker's storage onto it. DESTRUCTIVE operations (partition/format) are
+# guarded: we only touch a device that is the expected SIZE and has NO existing
+# partitions/filesystem, unless volume_force=true.
+# ============================================================================
+- name: "Require volume_mount_name and volume_size_gb"
+  ansible.builtin.assert:
+    that:
+      - "volume_mount_name is defined and volume_mount_name | length > 0"
+      - "volume_size_gb is defined and volume_size_gb | int > 0"
+    fail_msg: "volume_mount needs volume_mount_name and volume_size_gb."
+    quiet: true
+
+- name: "Gather block device facts"
+  ansible.builtin.setup:
+    gather_subset: ['hardware']
+
+# ROBUST device identification (no user-specified device, no fragile string match):
+# The attached volume is the block device that is (a) a whole disk, (b) has NO
+# partitions, and (c) is NOT the root/boot disk. We then VERIFY its size is in
+# the right ballpark (loose, GB-vs-GiB agnostic) as a safety confirmation before
+# doing anything destructive. This handles Chameleon reporting "200GiB" etc.
+- name: "Find the root device (so we never touch it)"
+  ansible.builtin.shell:
+    cmd: "findmnt -no SOURCE / | sed 's/[0-9]*$//; s#/dev/##'"
+  register: _rootdev
+  changed_when: false
+
+- name: "Identify unpartitioned, non-root disks"
+  ansible.builtin.set_fact:
+    _vol_candidates: >-
+      {{ ansible_devices | dict2items
+         | selectattr('value.partitions', 'equalto', {})
+         | rejectattr('key', 'equalto', _rootdev.stdout | trim)
+         | selectattr('value.removable', 'equalto', '0')
+         | map(attribute='key') | list }}
+
+- name: "Show detected candidate device(s)"
+  ansible.builtin.debug:
+    msg: >-
+      Root disk: {{ _rootdev.stdout | trim }}. Candidate volume device(s)
+      (unpartitioned, non-root): {{ _vol_candidates }}
+
+- name: "Fail if not exactly one candidate (refuse to guess on a destructive op)"
+  ansible.builtin.assert:
+    that: "_vol_candidates | length == 1"
+    fail_msg: >-
+      Expected exactly ONE unpartitioned non-root disk (the attached volume) but
+      found: {{ _vol_candidates }}. Refusing to partition/format to avoid
+      destroying the wrong disk. If a previous run already formatted the volume,
+      it now HAS a partition and is correctly excluded -- meaning there's nothing
+      to do. To override, set volume_force=true and volume_device explicitly.
+    quiet: true
+  when: not (volume_force | bool)
+
+- name: "Set the target device"
+  ansible.builtin.set_fact:
+    _dev: "/dev/{{ volume_device | default(_vol_candidates[0]) }}"
+
+- name: "Safety: verify the device size is in the expected ballpark"
+  # Loose check (GB vs GiB agnostic): guest-reported size should be within 20%
+  # of the requested size. Guards against accidentally grabbing a small disk.
+  ansible.builtin.assert:
+    that:
+      - "(_dev_gb | int) >= (volume_size_gb | int * 0.8)"
+      - "(_dev_gb | int) <= (volume_size_gb | int * 1.2)"
+    fail_msg: >-
+      Device {{ _dev }} reports ~{{ _dev_gb }}GB but you expected
+      ~{{ volume_size_gb }}GB. Refusing (wrong device?). Set volume_force=true to
+      override.
+    quiet: true
+  vars:
+    _dev_gb: "{{ ((ansible_devices[volume_device | default(_vol_candidates[0])].sectors | int)
+                  * (ansible_devices[volume_device | default(_vol_candidates[0])].sectorsize | int)
+                  / 1000000000) | round(0, 'floor') | int }}"
+  when: not (volume_force | bool)
+
+- name: "Create a GPT partition spanning the whole device (idempotent)"
+  community.general.parted:
+    device: "{{ _dev }}"
+    number: 1
+    label: gpt
+    state: present
+    part_start: 0%
+    part_end: 100%
+  become: true
+
+- name: "Format the partition (only creates fs if not already present)"
+  community.general.filesystem:
+    fstype: "{{ volume_fstype }}"
+    dev: "{{ _dev }}1"
+    # force is false by default -> will NOT reformat an existing filesystem
+  become: true
+
+- name: "Ensure the mount point exists"
+  ansible.builtin.file:
+    path: "{{ volume_mount_base }}/{{ volume_mount_name }}"
+    state: directory
+    mode: '0755'
+  become: true
+
+- name: "Mount the volume and persist in /etc/fstab"
+  ansible.posix.mount:
+    path: "{{ volume_mount_base }}/{{ volume_mount_name }}"
+    src: "{{ _dev }}1"
+    fstype: "{{ volume_fstype }}"
+    opts: defaults
+    state: mounted
+  become: true
+
+# ---- Point docker's data-root at the mounted volume (registry node) ----
+- name: "Configure docker data-root and (re)start docker"
+  when: volume_move_docker | bool
+  block:
+    - name: "Read existing daemon.json if present"
+      ansible.builtin.slurp:
+        src: "{{ docker_daemon_json }}"
+      register: _daemon_raw
+      failed_when: false
+
+    - name: "Compute merged daemon.json (preserve existing keys, set data-root)"
+      ansible.builtin.set_fact:
+        _daemon: >-
+          {{ (_daemon_raw.content | default('') | b64decode | from_json
+              if (_daemon_raw.content is defined) else {})
+             | combine({'data-root': volume_mount_base ~ '/' ~ volume_mount_name}) }}
+
+    - name: "Write daemon.json with data-root on the volume"
+      ansible.builtin.copy:
+        dest: "{{ docker_daemon_json }}"
+        content: "{{ _daemon | to_nice_json }}\n"
+        mode: '0644'
+      become: true
+      notify: restart docker
+
+    - name: "Stop docker before moving its data (flush handlers now)"
+      ansible.builtin.meta: flush_handlers

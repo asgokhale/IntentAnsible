@@ -1,0 +1,31 @@
+---
+# OpenStack (Chameleon KVM) implementation of volume_provision.
+# Create the volume, then attach it to the registry node. Both are name-based
+# and idempotent (state: present). Runs from the control node (delegated),
+# since these are cloud-API calls, not in-VM actions.
+# NOTE: state=present is NAME-IDEMPOTENT. If a volume with this name already
+# exists (e.g. from a previous run), it is REUSED, not duplicated -- no error.
+- name: "Create the volume on the cloud"
+  openstack.cloud.volume:
+    cloud: "{{ platform.cloud }}"
+    state: present
+    availability_zone: "{{ platform.zone | default('nova') }}"
+    name: "{{ volume_name }}"
+    size: "{{ volume_size_gb | int }}"
+    volume_type: "{{ volume_type }}"
+  delegate_to: localhost
+  run_once: true
+
+- name: "Resolve the registry server name to attach to"
+  ansible.builtin.set_fact:
+    _registry_server: "{{ (groups[volume_attach_group] | sort | first) }}"
+  run_once: true
+
+- name: "Attach the volume to the registry node"
+  openstack.cloud.server_volume:
+    cloud: "{{ platform.cloud }}"
+    state: present
+    server: "{{ _registry_server }}"
+    volume: "{{ volume_name }}"
+  delegate_to: localhost
+  run_once: true
