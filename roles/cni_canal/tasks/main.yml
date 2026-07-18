@@ -14,6 +14,8 @@
     state: present
     src: "/home/{{ remote_cloud_user }}/canal.yaml"
     kubeconfig: "/home/{{ remote_cloud_user }}/.kube/config"
+  vars:
+    ansible_python_interpreter: "{{ k8s_python_interpreter }}"
   when: _is_primary | bool
 - name: "Remove downloaded manifest"
   ansible.builtin.file: { path: "/home/{{ remote_cloud_user }}/canal.yaml", state: absent }

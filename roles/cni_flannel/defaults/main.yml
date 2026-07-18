@@ -1,2 +1,5 @@
 ---
 flannel_manifest_url: "https://github.com/flannel-io/flannel/releases/latest/download/kube-flannel.yml"
+# Python interpreter that has the `kubernetes` library (your venv). The
+# kubernetes.core modules run with this, not system python.
+k8s_python_interpreter: "{{ venv_dir }}/bin/python"

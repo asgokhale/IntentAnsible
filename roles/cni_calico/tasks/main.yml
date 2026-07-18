@@ -11,6 +11,8 @@
     state: present
     src: "{{ calico_operator_url }}"
     kubeconfig: "/home/{{ remote_cloud_user }}/.kube/config"
+  vars:
+    ansible_python_interpreter: "{{ k8s_python_interpreter }}"
   when: _is_primary | bool
 - name: "Fetch Calico custom-resources manifest"
   ansible.builtin.get_url:
@@ -35,4 +37,6 @@
     state: present
     src: "/home/{{ remote_cloud_user }}/calico-resources.yaml"
     kubeconfig: "/home/{{ remote_cloud_user }}/.kube/config"
+  vars:
+    ansible_python_interpreter: "{{ k8s_python_interpreter }}"
   when: _is_primary | bool

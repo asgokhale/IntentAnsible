@@ -5,7 +5,7 @@ inv/*/hosts.yml
 *.log
 
 # Your real inventories with captured IPs (optional: keep private)
-# inv/
+inv/
 
 # Editor / OS noise
 *.swp

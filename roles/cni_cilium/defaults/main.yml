@@ -1,3 +1,6 @@
 ---
 cilium_version: "1.16.1"
 cilium_helm_repo: "https://helm.cilium.io/"
+# Python interpreter that has the `kubernetes` library (your venv). The
+# kubernetes.core modules run with this, not system python.
+k8s_python_interpreter: "{{ venv_dir }}/bin/python"

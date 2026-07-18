@@ -16,16 +16,15 @@
 # Restart is via a handler (fires once, only if something changed).
 # ============================================================================
 
-- name: "Check whether containerd config exists"
-  ansible.builtin.stat:
-    path: "{{ cri_config_path }}"
-  register: _ctr_cfg
-
-- name: "Generate default containerd config if missing"
+- name: "Generate a fresh default containerd config (CRI-enabled)"
+  # ALWAYS regenerate: the shipped /etc/containerd/config.toml often has CRI
+  # disabled or is not k8s-ready, which causes kubeadm's
+  #   'unknown service runtime.v1.RuntimeService'
+  # preflight failure. `containerd config default` emits a CRI-ENABLED config.
+  # We then patch cgroup + registry path below.
   ansible.builtin.shell:
     cmd: "containerd config default > {{ cri_config_path }}"
   become: true
-  when: not _ctr_cfg.stat.exists
   notify: restart containerd
 
 - name: "Ensure containerd uses the systemd cgroup driver"

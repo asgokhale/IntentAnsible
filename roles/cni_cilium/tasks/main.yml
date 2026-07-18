@@ -9,6 +9,8 @@
   kubernetes.core.helm_repository:
     name: cilium
     repo_url: "{{ cilium_helm_repo }}"
+  vars:
+    ansible_python_interpreter: "{{ k8s_python_interpreter }}"
   when: _is_primary | bool
 - name: "Install Cilium via Helm"
   kubernetes.core.helm:
@@ -17,4 +19,6 @@
     chart_version: "{{ cilium_version }}"
     release_namespace: kube-system
     kubeconfig: "/home/{{ remote_cloud_user }}/.kube/config"
+  vars:
+    ansible_python_interpreter: "{{ k8s_python_interpreter }}"
   when: _is_primary | bool
