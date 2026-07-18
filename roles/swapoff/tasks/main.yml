@@ -1,0 +1,22 @@
+---
+# ============================================================================
+# Disable swap -- required by kubeadm. Does BOTH:
+#   1. runtime: `swapoff -a` (takes effect now)
+#   2. permanent: comment any swap line in /etc/fstab (survives reboot)
+# The legacy playbook only did runtime swapoff, so a reboot silently re-enabled
+# swap and could break the kubelet. This makes it stick.
+# Must run on all cluster nodes BEFORE k8s_init / join.
+# ============================================================================
+- name: "Turn swap off now (runtime)"
+  ansible.builtin.command:
+    cmd: swapoff -a
+  become: true
+  changed_when: false      # idempotent; don't report changed every run
+
+- name: "Disable swap permanently by commenting swap entries in /etc/fstab"
+  ansible.builtin.replace:
+    path: /etc/fstab
+    # match any line that mounts a swap filesystem, that isn't already commented
+    regexp: '^(\s*[^#\n]\S+\s+\S+\s+swap\s+.*)$'
+    replace: '# \1   # disabled for kubernetes (swap must be off)'
+  become: true

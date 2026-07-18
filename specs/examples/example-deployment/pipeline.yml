@@ -44,15 +44,20 @@ pipelines:
     - { step: k8s_start,      target: "role:k8s_control_plane" }
 
   # ---- full Kubernetes cluster bring-up (foundation + flannel) ----
+  # ---- full Kubernetes cluster bring-up ----
+  # Run with: -e active_pipeline=k8s_cluster   (set `cni:` in your vars)
   k8s_cluster:
-    # Runtime foundation
+    # registry side (on the dedicated registry node)
+    - { step: registry_start,   target: "role:docker_registry" }
+    # prep all cluster nodes (kubeadm needs swap off + containerd configured)
+    - { step: swapoff,          target: "role:k8s_control_plane,k8s_worker" }
     - { step: cri_config,       target: "role:k8s_control_plane,k8s_worker" }
     - { step: registry_trust,   target: "role:k8s_control_plane,k8s_worker" }
-    # Cluster formation (k8s_init reads cni_params[cni]; set `cni:` in your vars)
+    # form the cluster (CNI-agnostic init reads cni_params[cni])
     - { step: k8s_init,         target: "role:k8s_control_plane", gather_facts: true }
     - { step: k8s_join_capture, target: "role:k8s_control_plane" }
     - { step: k8s_join_workers, target: "role:k8s_worker" }
-    # Apply the chosen CNI (swap this line for cni_canal / cni_calico / cni_cilium)
+    # networking (swap cni_flannel for cni_canal / cni_calico / cni_cilium) + verify
     - { step: cni_flannel,      target: "role:k8s_control_plane" }
     - { step: k8s_verify,       target: "role:k8s_control_plane" }
 

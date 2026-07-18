@@ -1,0 +1,18 @@
+---
+# ============================================================================
+# Start the private Docker registry (stock registry:latest) on the
+# docker_registry node. Uses the docker_container module (idempotent: brings the
+# container to the desired running state; restarts on boot via restart_policy).
+# Target this at role:docker_registry only.
+# ============================================================================
+- name: "Start the private registry container"
+  community.docker.docker_container:
+    name: "{{ registry_container_name }}"
+    image: "{{ registry_image }}"
+    detach: true
+    pull: true
+    restart_policy: always
+    published_ports:
+      - "{{ registry_port }}:{{ registry_port }}"
+    state: started
+  become: true

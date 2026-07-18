@@ -379,3 +379,27 @@ Multi-cluster note: the current roles assume a single cluster (all control-plane
 nodes form it, all workers join). The "which cluster is this node in" decision is
 isolated to the primary-node selection -- the seam to generalize for multi-cluster
 (C1/C2 naming, per-cluster CIDR slicing) later.
+
+
+### Cluster prep + registry roles
+- `swapoff` -- disables swap (runtime `swapoff -a` AND comments swap in /etc/fstab
+  so it stays off across reboots). kubeadm requires swap off. Run on all cluster
+  nodes before k8s_init.
+- `registry_start` -- starts the private registry container (registry:latest) on
+  the docker_registry node. Vars: registry_image, registry_port,
+  registry_container_name.
+
+### Full k8s_cluster pipeline order
+`k8s_cluster` is just a named pipeline (a label under `pipelines:`, like
+`configure`). Select it with `-e active_pipeline=k8s_cluster`. Correct order:
+
+    registry_start (registry node)
+    swapoff, cri_config, registry_trust (all cluster nodes -- prep)
+    k8s_init -> k8s_join_capture -> k8s_join_workers (form cluster)
+    cni_<chosen> -> k8s_verify (network + check)
+
+Deferred / separate concerns (not in the cluster pipeline): the Chameleon volume
+create/attach/format/mount + docker data-root move (a registry disk-space
+optimization), and the registry-node daemon.json (only needed where you docker
+push). These are independent role-sets to add later, kept out of cluster
+bring-up so a volume issue can't masquerade as a cluster failure.

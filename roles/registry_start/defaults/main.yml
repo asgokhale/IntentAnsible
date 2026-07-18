@@ -1,0 +1,5 @@
+---
+# Private Docker registry container settings (runs on the docker_registry node).
+registry_container_name: "private_registry"
+registry_image: "registry:latest"
+registry_port: 5000
