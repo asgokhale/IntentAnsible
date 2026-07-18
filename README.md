@@ -403,3 +403,30 @@ create/attach/format/mount + docker data-root move (a registry disk-space
 optimization), and the registry-node daemon.json (only needed where you docker
 push). These are independent role-sets to add later, kept out of cluster
 bring-up so a volume issue can't masquerade as a cluster failure.
+
+
+## Composing pipelines (`include`)
+
+A pipeline can compose others instead of duplicating steps. Interleave
+`{ include: <pipeline_name> }` entries with normal steps; the framework flattens
+them (in order) before running:
+
+    pipelines:
+      provision_only:
+        - { step: node_provision, target: local, when_setup: vm }
+      configure:
+        - { step: apt_upgrade, target: "role:k8s_worker" }
+        # ...
+      k8s_cluster:
+        - { step: registry_start, target: "role:docker_registry" }
+        # ...
+      full:                      # compose the phases, no duplication
+        - { include: provision_only }
+        - { include: configure }
+        - { include: k8s_cluster }
+
+Run any phase alone (`-e active_pipeline=configure`) or all of them
+(`-e active_pipeline=full`). Includes may nest one level, may interleave with
+normal steps, and an unknown include name fails immediately with a clear error.
+Selecting a pipeline name that doesn't exist also fails with the list of
+available pipelines.

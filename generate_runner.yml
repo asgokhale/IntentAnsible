@@ -14,10 +14,62 @@
   connection: local
   gather_facts: no
   tasks:
+    - name: "Validate that the requested pipeline exists"
+      ansible.builtin.assert:
+        that: "active_pipeline in pipelines"
+        fail_msg: >-
+          Pipeline '{{ active_pipeline }}' is not defined. Available pipelines:
+          {{ pipelines.keys() | list }}
+        quiet: true
+
+    # ---- Pipeline includes ----------------------------------------------
+    # A pipeline may compose others: interleave `{ include: <name> }` entries
+    # with normal steps. We flatten includes (in order) into one step list, so
+    # e.g.  full: [ {include: configure}, {include: k8s_cluster} ]  runs both
+    # with no duplicated steps. We do several passes to allow one child to also
+    # include another; a pass cap prevents infinite loops on accidental cycles.
+    - name: "Seed expansion with the requested pipeline"
+      ansible.builtin.set_fact:
+        _all_steps: "{{ pipelines[active_pipeline] }}"
+
+    - name: "Validate all include names reference real pipelines"
+      ansible.builtin.assert:
+        that: "item.include in pipelines"
+        fail_msg: >-
+          Pipeline include references unknown pipeline '{{ item.include }}'.
+          Available pipelines: {{ pipelines.keys() | list }}
+        quiet: true
+      loop: "{{ pipelines.values() | map('selectattr', 'include', 'defined') | map('list') | flatten }}"
+      loop_control:
+        label: "{{ item.include }}"
+
+    - name: "Flatten includes (bounded passes handle nesting; cap guards cycles)"
+      ansible.builtin.set_fact:
+        _all_steps: >-
+          {%- set out = [] -%}
+          {%- for s in _all_steps -%}
+            {%- if s.include is defined -%}
+              {%- set _ = out.extend(pipelines[s.include]) -%}
+            {%- else -%}
+              {%- set _ = out.append(s) -%}
+            {%- endif -%}
+          {%- endfor -%}
+          {{ out }}
+      loop: "{{ range(0, 5) | list }}"
+      when: "(_all_steps | selectattr('include','defined') | list | length) > 0"
+
+    - name: "Fail if any include did not resolve (unknown or cyclic)"
+      ansible.builtin.assert:
+        that: "(_all_steps | selectattr('include','defined') | list | length) == 0"
+        fail_msg: >-
+          Unresolved pipeline include(s) after expansion -- check for an unknown
+          pipeline name or an include cycle in: {{ active_pipeline }}
+        quiet: true
+
     - name: "Normalize step ids (id defaults to the step/role name)"
       ansible.builtin.set_fact:
         _all_steps: >-
-          {{ pipelines[active_pipeline]
+          {{ _all_steps
              | map('combine', {}) | list }}
 
     - name: "Attach effective id to each step"
