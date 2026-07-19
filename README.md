@@ -503,3 +503,28 @@ log driver, ...) and `registry_docker_trust` for the one setting whose value mus
 be discovered (insecure-registries <- registry IP from inventory). Both MERGE, so
 they coexist in one daemon.json. Put container-name and image choices on
 `registry_start`.
+
+
+## Pointing docker at a volume (`docker_data_root`)
+
+To put docker's storage on a mounted volume, use `docker_data_root`. You supply
+a plain ABSOLUTE PATH; the role owns the docker-specific detail (that this sets
+daemon.json `data-root`). You never type `data-root`.
+
+    # vars:
+    docker_data_root_path: /mnt/dockervol      # a path you know; NOT docker jargon
+
+    # pipeline (after volume_mount, before registry_start/pulls):
+    - { step: docker_data_root, target: "role:docker_registry",
+        requires: [docker_data_root_path] }
+
+Separation of concerns (four roles, each owning the right knowledge):
+- `volume_mount`        -- storage only; mounts a volume, knows nothing about docker
+                           (reusable for data/logs/anything).
+- `docker_data_root`    -- "docker stores here": takes a plain path, hides the
+                           data-root key.
+- `registry_docker_trust` -- insecure-registries; registry IP DISCOVERED from
+                           inventory (user supplies nothing).
+- `docker_config`       -- generic daemon.json settings the user chooses explicitly
+                           (cgroup driver, log driver, ...).
+All four MERGE into daemon.json, so they coexist.

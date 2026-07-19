@@ -1,5 +1,14 @@
 ---
 # Private Docker registry container settings (runs on the docker_registry node).
+#
+# registry_container_name: the name of the registry container. registry_start
+# removes-then-recreates the container with THIS name (idempotent, and it frees
+# the port / rebinds to the current data-root).
+#
+# IMPORTANT: if you already have a registry container running under a DIFFERENT
+# name (e.g. from a previous manual setup called "MyRegistry"), set this var to
+# that name so registry_start removes the RIGHT container and frees port
+# {{ registry_port }}. If you don't set it, the framework default below is used.
 registry_container_name: "private_registry"
 registry_image: "registry:latest"
 registry_port: 5000
