@@ -1,0 +1,9 @@
+---
+# docker_data_root -- point docker's storage at a path (e.g. a mounted volume).
+# The user supplies a plain ABSOLUTE PATH; this role owns the docker-specific
+# detail (that this means the daemon.json `data-root` key). Merges into any
+# existing daemon.json and restarts docker on change.
+#
+# USER supplies (vars):
+#   docker_data_root_path : absolute path for docker's storage, e.g. /mnt/dockervol
+docker_daemon_json: /etc/docker/daemon.json

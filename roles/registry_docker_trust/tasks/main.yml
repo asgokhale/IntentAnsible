@@ -1,0 +1,59 @@
+---
+# ============================================================================
+# Add the private registry to docker's insecure-registries (daemon.json).
+# Registry address is DISCOVERED from the {{ registry_group }} inventory group
+# (its private IP), exactly like registry_trust does for containerd. Merges into
+# any existing daemon.json (so it coexists with data-root / other settings set by
+# docker_config). Restarts docker on change.
+#
+# Target this at whatever nodes run `docker` against the registry (typically the
+# registry node itself, where you push images).
+# ============================================================================
+- name: "Discover registry endpoints from the inventory group"
+  ansible.builtin.set_fact:
+    _registry_endpoints: >-
+      {{ groups[registry_group] | default([])
+         | map('extract', hostvars, 'ansible_host')
+         | select('defined') | list }}
+
+- name: "Fail clearly if no registry nodes found"
+  ansible.builtin.assert:
+    that: "_registry_endpoints | length > 0"
+    fail_msg: >-
+      No registry hosts in inventory group '{{ registry_group }}'. Ensure a node
+      group has role '{{ registry_group }}' and was provisioned.
+    quiet: true
+
+- name: "Build insecure-registries list (<ip>:<port>)"
+  ansible.builtin.set_fact:
+    _insecure_list: "{{ _registry_endpoints | map('regex_replace', '^(.*)$', '\\1:' ~ registry_port) | list }}"
+
+- name: "Read existing daemon.json if present"
+  ansible.builtin.slurp:
+    src: "{{ docker_daemon_json }}"
+  register: _daemon_raw
+  failed_when: false
+  become: true
+
+- name: "Merge insecure-registries into daemon.json (preserve other keys)"
+  ansible.builtin.set_fact:
+    _daemon_merged: >-
+      {{ (_daemon_raw.content | default('') | b64decode | from_json
+          if (_daemon_raw.content is defined and _daemon_raw.content | default('') | length > 0)
+          else {})
+         | combine({'insecure-registries': _insecure_list}, recursive=true) }}
+
+- name: "Ensure /etc/docker exists"
+  ansible.builtin.file:
+    path: "{{ docker_daemon_json | dirname }}"
+    state: directory
+    mode: '0755'
+  become: true
+
+- name: "Write daemon.json with insecure-registries"
+  ansible.builtin.copy:
+    dest: "{{ docker_daemon_json }}"
+    content: "{{ _daemon_merged | to_nice_json }}\n"
+    mode: '0644'
+  become: true
+  notify: restart docker

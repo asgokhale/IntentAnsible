@@ -1,0 +1,11 @@
+---
+# registry_docker_trust -- the DOCKER-daemon analog of registry_trust (which does
+# the containerd side). Discovers the private registry endpoint(s) from the
+# inventory and adds them to docker's daemon.json `insecure-registries`, so
+# `docker push`/`docker pull` against the insecure private registry works.
+#
+# The registry ADDRESS is discovered (not user-supplied) -- symmetric with
+# registry_trust. User supplies nothing here except optional overrides.
+registry_group: docker_registry        # inventory group running the registry
+registry_port: 5000
+docker_daemon_json: /etc/docker/daemon.json

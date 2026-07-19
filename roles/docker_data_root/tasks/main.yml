@@ -1,0 +1,59 @@
+---
+# ============================================================================
+# Point docker's storage at docker_data_root_path. The user gives a plain path;
+# this role translates that intent into docker's daemon.json `data-root` setting
+# (the user never needs to know the key name). Merges into existing daemon.json
+# so it coexists with other settings (insecure-registries, cgroup driver, ...).
+# Restarts docker on change.
+#
+# NOTE: changing data-root while docker is running relocates its storage; docker
+# will start using the new path after restart (existing images at the old path
+# are not auto-migrated -- set this up BEFORE pulling/starting containers).
+# ============================================================================
+- name: "Require docker_data_root_path (absolute path)"
+  ansible.builtin.assert:
+    that:
+      - "docker_data_root_path is defined"
+      - "docker_data_root_path is string"
+      - "docker_data_root_path.startswith('/')"
+    fail_msg: >-
+      docker_data_root needs docker_data_root_path -- an absolute path for
+      docker's storage, e.g. /mnt/dockervol.
+    quiet: true
+
+- name: "Ensure the target path exists"
+  ansible.builtin.file:
+    path: "{{ docker_data_root_path }}"
+    state: directory
+    mode: '0711'
+  become: true
+
+- name: "Read existing daemon.json if present"
+  ansible.builtin.slurp:
+    src: "{{ docker_daemon_json }}"
+  register: _daemon_raw
+  failed_when: false
+  become: true
+
+- name: "Merge data-root into daemon.json (preserve other keys)"
+  ansible.builtin.set_fact:
+    _daemon_merged: >-
+      {{ (_daemon_raw.content | default('') | b64decode | from_json
+          if (_daemon_raw.content is defined and _daemon_raw.content | default('') | length > 0)
+          else {})
+         | combine({'data-root': docker_data_root_path}, recursive=true) }}
+
+- name: "Ensure /etc/docker exists"
+  ansible.builtin.file:
+    path: "{{ docker_daemon_json | dirname }}"
+    state: directory
+    mode: '0755'
+  become: true
+
+- name: "Write daemon.json with data-root"
+  ansible.builtin.copy:
+    dest: "{{ docker_daemon_json }}"
+    content: "{{ _daemon_merged | to_nice_json }}\n"
+    mode: '0644'
+  become: true
+  notify: restart docker

@@ -443,7 +443,7 @@ docker's storage onto it. Two decoupled roles:
   pipelines still just say `volume_provision`. User vars: `volume_size_gb`
   (required, e.g. 200), optional `volume_type` (ceph-hdd/ceph-ssd).
 - `volume_mount` -- GENERIC (no cloud API): safely partitions/formats/mounts the
-  attached device and points docker's data-root at it. User vars:
+  attached device leaving docker configuration to the separate docker_config role. User vars:
   `volume_mount_name` (dir under /mnt), `volume_size_gb` (a loose size sanity
   check). The device is AUTO-DETECTED as the single unpartitioned, non-root,
   non-removable disk (you can't know the device name in advance -- it's created
@@ -460,3 +460,46 @@ Example pipeline (registry node only), run BEFORE registry_start:
     - { step: volume_mount,     target: "role:docker_registry", gather_facts: true }
 
 Needs collections: community.general (parted/filesystem), ansible.posix (mount).
+
+
+## Configuring the docker daemon (`docker_config`)
+
+`docker_config` applies settings to /etc/docker/daemon.json, MERGING into any
+existing file so you can invoke it multiple times at different pipeline stages
+without clobbering earlier settings. It's generic -- it doesn't know about
+volumes or registries; you tell it what to set.
+
+Uniform vars rule: name a settings var in the pipeline; define the dict in vars.
+
+    # in your vars:
+    dockervol_dataroot: { data-root: /mnt/dockervol }
+    registry_insecure:  { insecure-registries: ["REGISTRY_IP:5000"] }
+
+    # in your pipeline, at the appropriate stages:
+    - { step: volume_mount,   target: "role:docker_registry", gather_facts: true }
+    - { step: docker_config,  target: "role:docker_registry",
+        vars: { docker_daemon_settings: dockervol_dataroot } }     # data-root AFTER mount
+    - { step: registry_start, target: "role:docker_registry" }
+    - { step: docker_config,  target: "role:docker_registry",
+        vars: { docker_daemon_settings: registry_insecure } }      # insecure-reg AFTER start
+
+This keeps concerns cleanly separated: volume_mount does storage only,
+registry_start runs the container, and docker_config (invoked as needed) owns
+daemon.json. Multiple docker_config calls layer their settings via merge.
+
+
+## Registry trust for docker (`registry_docker_trust`)
+
+The docker-daemon analog of `registry_trust` (which handles containerd). Adds the
+private registry to docker's `insecure-registries` in daemon.json, so
+`docker push`/`pull` against the insecure registry works. The registry ADDRESS is
+DISCOVERED from the `docker_registry` inventory group -- you supply nothing.
+
+    - { step: registry_docker_trust, target: "role:docker_registry" }
+
+Design note: docker daemon.json is configured by TWO roles by concern --
+`docker_config` for settings you supply explicitly (data-root, cgroup driver,
+log driver, ...) and `registry_docker_trust` for the one setting whose value must
+be discovered (insecure-registries <- registry IP from inventory). Both MERGE, so
+they coexist in one daemon.json. Put container-name and image choices on
+`registry_start`.
