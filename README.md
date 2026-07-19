@@ -528,3 +528,30 @@ Separation of concerns (four roles, each owning the right knowledge):
 - `docker_config`       -- generic daemon.json settings the user chooses explicitly
                            (cgroup driver, log driver, ...).
 All four MERGE into daemon.json, so they coexist.
+
+
+## CAUTION: reusing a volume that was a docker data-root
+
+Persistent volumes remember everything. If you reattach a volume that was
+previously docker's `data-root` and then point docker at it (via
+`docker_data_root`), docker reads the container/image metadata stored on the
+volume and **automatically restarts any containers whose definitions are saved
+there** (those with `restart_policy: always`). Your old images AND old
+containers come back to life.
+
+This is usually WELCOME (you recover your registry and images without
+rebuilding). But note:
+
+- An old registry container may auto-start and claim the registry port under its
+  ORIGINAL name (e.g. `PangeaRegistry`), even though you never supplied that name
+  this time -- it came from the volume's metadata.
+- `registry_start` (remove-then-recreate by name) will then collide on the port
+  unless you tell it the real name. Set:
+
+      registry_container_name: PangeaRegistry   # match the resurrected container
+
+  Or remove the old container once (`docker rm -f <name>`) and let the framework
+  create its default (`private_registry`).
+
+Steps that only touch daemon.json (`docker_data_root`, `registry_docker_trust`,
+`docker_config`) don't depend on the container name and work regardless.
