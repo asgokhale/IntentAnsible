@@ -29,12 +29,18 @@
   changed_when: false
 
 - name: "Identify unpartitioned, non-root disks"
+  # Only REAL attached disks are candidates. We explicitly exclude virtual /
+  # pseudo block devices that also appear in ansible_devices but are never an
+  # attached volume: loop* (snap mounts), ram*, dm-* (device-mapper), sr* (cdrom),
+  # fd* (floppy). Attached cloud volumes are vd* (virtio), sd* (scsi/sata),
+  # xvd* (xen), or nvme* -- we keep only those.
   ansible.builtin.set_fact:
     _vol_candidates: >-
       {{ ansible_devices | dict2items
          | selectattr('value.partitions', 'equalto', {})
          | rejectattr('key', 'equalto', _rootdev.stdout | trim)
          | selectattr('value.removable', 'equalto', '0')
+         | selectattr('key', 'match', '^(vd|sd|xvd|nvme)')
          | map(attribute='key') | list }}
 
 - name: "Show detected candidate device(s)"
@@ -110,30 +116,9 @@
     state: mounted
   become: true
 
-# ---- Point docker's data-root at the mounted volume (registry node) ----
-- name: "Configure docker data-root and (re)start docker"
-  when: volume_move_docker | bool
-  block:
-    - name: "Read existing daemon.json if present"
-      ansible.builtin.slurp:
-        src: "{{ docker_daemon_json }}"
-      register: _daemon_raw
-      failed_when: false
-
-    - name: "Compute merged daemon.json (preserve existing keys, set data-root)"
-      ansible.builtin.set_fact:
-        _daemon: >-
-          {{ (_daemon_raw.content | default('') | b64decode | from_json
-              if (_daemon_raw.content is defined) else {})
-             | combine({'data-root': volume_mount_base ~ '/' ~ volume_mount_name}) }}
-
-    - name: "Write daemon.json with data-root on the volume"
-      ansible.builtin.copy:
-        dest: "{{ docker_daemon_json }}"
-        content: "{{ _daemon | to_nice_json }}\n"
-        mode: '0644'
-      become: true
-      notify: restart docker
-
-    - name: "Stop docker before moving its data (flush handlers now)"
-      ansible.builtin.meta: flush_handlers
+- name: "Report the mounted volume path"
+  ansible.builtin.debug:
+    msg: >-
+      Volume mounted at {{ volume_mount_base }}/{{ volume_mount_name }}.
+      To put docker's storage here, run docker_config with a settings var like
+      {'data-root': '{{ volume_mount_base }}/{{ volume_mount_name }}'}.

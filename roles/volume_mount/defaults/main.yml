@@ -1,17 +1,15 @@
 ---
-# volume_mount -- partition/format/mount an attached volume and point docker's
-# data-root at it. GENERIC (no cloud API): works on any attached block device.
+# volume_mount -- partition/format/mount an attached volume. GENERIC storage only
+# (no docker, no cloud API). To put docker's data-root here, use the separate
+# docker_config role AFTER this one.
 #
 # USER supplies (vars):
 #   volume_mount_name : directory name under /mnt (e.g. "dockervol" -> /mnt/dockervol)
-#   volume_size_gb    : the volume's size (used to IDENTIFY the right device safely)
+#   volume_size_gb    : the volume's size (loose sanity check to identify the device)
 # Optional:
 #   volume_fstype     : filesystem (default ext4)
-#   volume_move_docker: whether to repoint docker data-root here (default true)
 #   volume_force      : allow (re)partitioning a NON-empty device (default false -- DANGER)
+#   volume_device     : explicit device name (only with volume_force; normally auto-detected)
 volume_fstype: ext4
-volume_move_docker: true
 volume_force: false
 volume_mount_base: /mnt
-# docker daemon.json path (registry node)
-docker_daemon_json: /etc/docker/daemon.json

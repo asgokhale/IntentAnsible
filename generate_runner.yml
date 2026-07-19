@@ -121,7 +121,11 @@
         _missing_requires: >-
           {{ _missing_requires | default([])
              + [ {'step': item.0.step, 'var': item.1} ]
-             if (vars[item.1] is not defined or vars[item.1] | length == 0)
+             if (vars[item.1] is not defined
+                 or vars[item.1] is none
+                 or (vars[item.1] is string and vars[item.1] | trim | length == 0)
+                 or ((vars[item.1] is sequence or vars[item.1] is mapping)
+                     and not (vars[item.1] is string) and vars[item.1] | length == 0))
              else _missing_requires | default([]) }}
       loop: "{{ _steps | subelements('requires', skip_missing=True) }}"
       loop_control:
