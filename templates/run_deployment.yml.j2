@@ -20,8 +20,9 @@
 # own hosts -- the thing a single looped play cannot do).
 {% for step in _steps %}
 {% set tgt = step.target %}
+{% set is_local = (tgt == 'local') %}
 {% if tgt == 'local' %}
-{%   set pattern = local_inventory | default('LocalNodes') %}
+{%   set pattern = 'localhost' %}
 {% elif tgt.startswith('role:') %}
 {%   set pattern = tgt[5:] | replace(',', ':') %}
 {% else %}
@@ -29,6 +30,9 @@
 {% endif %}
 - name: "STEP: {{ step._id | default(step.step) }}  ->  {{ pattern }}"
   hosts: "{{ pattern }}"
+{% if is_local %}
+  connection: local
+{% endif %}
   gather_facts: "{{ step.gather_facts | default(false) | lower }}"
 {% if step.remote_user is defined %}
   remote_user: "{{ step.remote_user }}"
