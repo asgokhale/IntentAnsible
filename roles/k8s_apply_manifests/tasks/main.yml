@@ -1,0 +1,61 @@
+---
+# ============================================================================
+# Render templated k8s manifests with the DISCOVERED registry endpoint, then
+# apply them. The registry IP is discovered from the {{ registry_group }}
+# inventory group (same as registry_docker_trust), so manifests never hardcode a
+# per-deployment IP -- they use {{ registry_endpoint }}.
+# Runs on the primary control-plane only.
+# ============================================================================
+- name: "Identify the primary control-plane node"
+  ansible.builtin.set_fact:
+    _is_primary: "{{ inventory_hostname == (groups['k8s_control_plane'] | sort | first) }}"
+
+- name: "Discover the registry endpoint from inventory"
+  ansible.builtin.set_fact:
+    registry_endpoint: >-
+      {{ (groups[registry_group] | default([])
+          | map('extract', hostvars, 'ansible_host')
+          | select('defined') | first) ~ ':' ~ registry_port }}
+  when: _is_primary | bool
+
+- name: "Fail clearly if no registry found"
+  ansible.builtin.assert:
+    that: "groups[registry_group] | default([]) | length > 0"
+    fail_msg: "No registry host in inventory group '{{ registry_group }}'."
+    quiet: true
+  when: _is_primary | bool
+
+- name: "Ensure render directory exists"
+  ansible.builtin.file:
+    path: "{{ manifest_render_dir }}"
+    state: directory
+    mode: '0755'
+  when: _is_primary | bool
+
+- name: "Find manifest templates"
+  ansible.builtin.find:
+    paths: "{{ manifest_src_dir }}"
+    patterns: "*.yaml.j2"
+  delegate_to: localhost
+  register: _manifests
+  when: _is_primary | bool
+
+- name: "Render each manifest with the discovered registry endpoint"
+  ansible.builtin.template:
+    src: "{{ item.path }}"
+    dest: "{{ manifest_render_dir }}/{{ item.path | basename | regex_replace('\\.j2$', '') }}"
+    mode: '0644'
+  loop: "{{ _manifests.files }}"
+  loop_control: { label: "{{ item.path | basename }}" }
+  when: _is_primary | bool
+
+- name: "Apply the rendered manifests to the cluster"
+  kubernetes.core.k8s:
+    state: present
+    src: "{{ manifest_render_dir }}/{{ item.path | basename | regex_replace('\\.j2$', '') }}"
+    kubeconfig: "/home/{{ remote_cloud_user }}/.kube/config"
+  vars:
+    ansible_python_interpreter: "{{ k8s_python_interpreter }}"
+  loop: "{{ _manifests.files }}"
+  loop_control: { label: "{{ item.path | basename }}" }
+  when: _is_primary | bool

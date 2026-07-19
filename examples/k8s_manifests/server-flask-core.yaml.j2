@@ -1,0 +1,58 @@
+# Templated k8s manifest. The registry endpoint is injected by the framework
+# (discovered from the docker_registry inventory group), so the image line is
+# NOT hardcoded to a per-deployment IP. Everything else is left literal for
+# readability -- templatize more only if those values genuinely vary per deploy.
+# ==============================================================================
+# SERVER-FLASK-CORE Deployment
+# ==============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: server-flask-core
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: server-flask-core
+  template:
+    metadata:
+      labels:
+        app: server-flask-core
+    spec:
+      restartPolicy: Always
+      containers:
+        - name: flask-core
+          image: {{ registry_endpoint }}/touchstone/src-server-flask-core:latest
+          imagePullPolicy: Always
+          command: ["flask"]
+          args: ["--app", "flask/server.py", "run", "--host=0.0.0.0", "--port=5001"]
+          resources:
+            requests:
+              memory: "2Gi"
+              cpu: "1"
+            limits:
+              memory: "3276Mi"
+              cpu: "2"
+          ports:
+            - containerPort: 5001
+          env:
+            - name: TOUCHSTONE_DEPLOYMENT
+              value: "k8s"
+            - name: TOUCHSTONE_WORKER_POOLSIZE
+              value: "1"
+            - name: TOUCHSTONE_SERVICE_HOST
+              value: "cloud-worker"
+            - name: TOUCHSTONE_SERVICE_PORT
+              value: "5555"
+          volumeMounts:
+            - name: db-volume
+              mountPath: /server/flask/database
+            - name: users-volume
+              mountPath: /server/core/users
+      volumes:
+        - name: db-volume
+          persistentVolumeClaim:
+            claimName: touchstone-db-pvc
+        - name: users-volume
+          persistentVolumeClaim:
+            claimName: touchstone-users-pvc

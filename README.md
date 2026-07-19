@@ -555,3 +555,29 @@ rebuilding). But note:
 
 Steps that only touch daemon.json (`docker_data_root`, `registry_docker_trust`,
 `docker_config`) don't depend on the container name and work regardless.
+
+
+## Deploying workloads with templated manifests (`k8s_apply_manifests`)
+
+Workload manifests often hardcode the registry IP in image lines
+(`192.168.3.46:5000/touchstone/...`). Since the registry IP changes per
+deployment, templatize it: rename the manifest to `*.yaml.j2` and replace the IP
+with `{{ registry_endpoint }}`:
+
+    image: {{ registry_endpoint }}/touchstone/src-server-flask-core:latest
+
+`k8s_apply_manifests` discovers the registry endpoint from the `docker_registry`
+inventory group (same as registry_docker_trust), renders every `*.yaml.j2` in
+your manifest dir, and applies them to the cluster (on the primary control-plane,
+using the venv python that has the kubernetes lib).
+
+    # vars:
+    manifest_src_dir: mydeployments/pangea/manifests   # your *.yaml.j2 files
+
+    # pipeline (after the cluster + registry are up):
+    - { step: k8s_apply_manifests, target: "role:k8s_control_plane",
+        gather_facts: true, requires: [manifest_src_dir] }
+
+Templatize ONLY what varies per deployment (the registry IP). Leave stable values
+(replicas, resource limits, ports) literal for readability -- add more variables
+only if those genuinely change between deployments.
