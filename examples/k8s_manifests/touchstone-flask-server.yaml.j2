@@ -1,0 +1,61 @@
+# Google AI helped convert the docker compose to this YAML, which 
+# we have further modified as deemed fit.
+
+# ==============================================================================
+# 2. SERVER-FLASK-CORE Deployment
+# ==============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: server-flask-core  # name of this deployment
+spec:
+  replicas: 1  # only one flask server will be running
+  selector:
+    matchLabels:
+      app: server-flask-core # used by the Service to match the pod
+  template:
+    metadata:
+      labels:
+        app: server-flask-core
+    spec:
+      restartPolicy: Always  # always restart on failure
+      containers:
+        - name: flask-core
+          image: {{ registry_endpoint }}/touchstone/src-server-flask-core:latest
+          imagePullPolicy: Always
+          command: ["flask"]
+          args: ["--app", "flask/server.py", "run", "--host=0.0.0.0", "--port=5001"]
+          resources:
+            requests:
+              memory: "2Gi"     # Assures the pod only schedules on a node with 2GB free
+              cpu: "1"          # Claims 1 of your 2 available vCPUs
+            limits:
+              memory: "3276Mi"  # HARD CEILING: Leaving ~600MB completely safe for
+                                # the KVM OS (needs integer and so converted to Mi)
+              cpu: "2"          # Allows bursting to use both vCPUs
+          ports:
+            - containerPort: 5001
+# Not sure if we need this because our mounted volume is writable
+#        securityContext:
+#          runAsUser: 0 # Matches user: "root" from Docker Compose
+          env:
+            - name: TOUCHSTONE_DEPLOYMENT
+              value: "k8s"
+            - name: TOUCHSTONE_WORKER_POOLSIZE
+              value: "1"
+            - name: TOUCHSTONE_SERVICE_HOST
+              value: "cloud-worker" # Connects directly to the cloud-worker K8s Service
+            - name: TOUCHSTONE_SERVICE_PORT
+              value: "5555"
+          volumeMounts:
+            - name: db-volume
+              mountPath: /server/flask/database
+            - name: users-volume
+              mountPath: /server/core/users
+      volumes:
+        - name: db-volume
+          persistentVolumeClaim:
+            claimName: touchstone-db-pvc
+        - name: users-volume
+          persistentVolumeClaim:
+            claimName: touchstone-users-pvc

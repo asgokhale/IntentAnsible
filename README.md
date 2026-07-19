@@ -581,3 +581,36 @@ using the venv python that has the kubernetes lib).
 Templatize ONLY what varies per deployment (the registry IP). Leave stable values
 (replicas, resource limits, ports) literal for readability -- add more variables
 only if those genuinely change between deployments.
+
+
+## NFS-backed app storage + workload deployment
+
+Full chain to run a workload that needs shared persistent storage (docker-compose
+volumes -> k8s NFS PVs). Two IPs are DISCOVERED (registry, nfs server); you supply
+the storage shape and manifests. ORDER: volume -> nfs -> storage -> workloads.
+
+Roles:
+- `nfs_server` (on master) -- exports the mounted app volume; creates per-volume
+  subdirs from nfs_volumes.
+- `nfs_client` (on workers) -- installs nfs-common so kubelet can mount NFS PVs.
+- `k8s_nfs_storage` (primary CP) -- generates static PV+PVC pairs from the
+  nfs_volumes list (NFS IP discovered) and applies them.
+- `k8s_apply_manifests` (primary CP) -- creates configmaps from files, renders
+  *.yaml.j2 with discovered registry_endpoint + nfs_server_ip, applies them.
+
+User contract (see examples/k8s_manifests/EXAMPLE_vars.yml):
+- nfs_export_base (e.g. /mnt/touchstone), nfs_volumes [{name,subpath,size}...],
+  manifest_src_dir, optional configmap_files [{name,file}...].
+- The SECOND app-data volume (on the master) is separate from the docker volume;
+  provision/mount it with volume_provision + volume_mount targeting the master.
+
+In your manifests, replace hardcoded IPs: registry -> {{ registry_endpoint }},
+nfs/master -> {{ nfs_server_ip }}. Templated examples of the touchstone
+deployments/services live in examples/k8s_manifests/.
+
+CONSISTENCY the framework can't check: nfs_volumes subpaths, the PVC names your
+deployments claim, and the container mountPaths must all agree.
+
+CONFIGMAP note: NFS PVs mount DIRECTORIES, not single files. To inject one file
+(e.g. metric_definitions.json) use a configmap + subPath mount (see the
+client-streamlit example). configmap_files creates these from your file.

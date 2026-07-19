@@ -1,0 +1,32 @@
+# Generated PVs + PVCs from nfs_volumes. NFS server IP discovered from inventory.
+{% for v in nfs_volumes %}
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: {{ v.name }}-pv
+spec:
+  capacity:
+    storage: {{ v.size }}
+  volumeMode: Filesystem
+  accessModes:
+    - {{ nfs_access_mode }}
+  persistentVolumeReclaimPolicy: {{ nfs_reclaim_policy }}
+  storageClassName: {{ storage_class_name }}
+  nfs:
+    path: {{ nfs_export_base }}/{{ v.subpath }}
+    server: {{ nfs_server_ip }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ v.name }}-pvc
+spec:
+  accessModes:
+    - {{ nfs_access_mode }}
+  storageClassName: {{ storage_class_name }}
+  resources:
+    requests:
+      storage: {{ v.size }}
+  volumeName: {{ v.name }}-pv
+{% endfor %}

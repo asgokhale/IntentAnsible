@@ -1,0 +1,56 @@
+# Google AI helped convert the docker compose to this YAML, which 
+# we have further modified as deemed fit. Also, we split the services
+# and deployments into two separate files so that in case we 
+# need to redeploy just the deployments, we can do so without affecting
+# the service declarations.
+
+# ==============================================================================
+# 1. CLOUD-WORKER Service
+# ==============================================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: cloud-worker # This becomes the exact dns hostname used by server-flask-core
+spec:
+  selector:
+    app: cloud-worker
+  ports:
+  - protocol: TCP
+    port: 5555
+    targetPort: 5555
+
+---
+# ==============================================================================
+# 2. SERVER-FLASK-CORE Service
+# ==============================================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: server-flask-core # This becomes the DNS hostname used by client-streamlit
+spec:
+  selector:
+    app: server-flask-core
+  ports:
+  - protocol: TCP
+    port: 5001
+    targetPort: 5001
+
+---
+# ==============================================================================
+# 3. CLIENT-STREAMLIT Public Service
+# ==============================================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: client-streamlit-public  # we will do this in production
+#  name: client-streamlit-private  # we will keep it private for testing
+spec:
+  type: NodePort # Exposes Streamlit outside of Chameleon Cloud cluster network
+#  type: ClusterIP  # this is default (for testing we will ssh tunnel and port forward)
+  selector:
+    app: client-streamlit
+  ports:
+  - protocol: TCP
+    port: 8501
+    targetPort: 8501
+    nodePort: 30501 # Access the UI via http://<ANY_NODE_IP>:30501

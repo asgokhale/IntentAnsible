@@ -1,16 +1,17 @@
 ---
-# k8s_apply_manifests -- render templated k8s manifests (.yaml.j2) with the
-# discovered registry endpoint, then apply them to the cluster. Runs on the
-# primary control-plane (where kubeconfig lives).
+# k8s_apply_manifests -- render templated k8s manifests (*.yaml.j2) with the
+# discovered registry endpoint AND nfs server IP, create any configmaps from
+# files, then apply everything. Primary control-plane only.
 #
 # USER supplies (vars):
-#   manifest_src_dir : directory of .yaml.j2 templates (e.g. in mydeployments/)
+#   manifest_src_dir : dir of *.yaml.j2 templates
 # Optional:
-#   registry_group   : inventory group with the registry (default docker_registry)
-#   registry_port    : default 5000
+#   configmap_files  : [ { name, file }, ... ] -- create a configmap per file
+#                      (used for single-file mounts like metric_definitions.json)
+#   registry_group / control_plane_group : inventory group names
 registry_group: docker_registry
+control_plane_group: k8s_control_plane
 registry_port: 5000
+configmap_files: []
 manifest_render_dir: "/home/{{ remote_cloud_user }}/rendered_manifests"
-# Python interpreter that has the `kubernetes` lib (your venv) -- same pattern as
-# the CNI roles, so kubernetes.core.k8s doesn't fail on system python.
 k8s_python_interpreter: "{{ venv_dir }}/bin/python"

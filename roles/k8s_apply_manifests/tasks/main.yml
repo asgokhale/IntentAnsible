@@ -1,37 +1,48 @@
 ---
 # ============================================================================
-# Render templated k8s manifests with the DISCOVERED registry endpoint, then
-# apply them. The registry IP is discovered from the {{ registry_group }}
-# inventory group (same as registry_docker_trust), so manifests never hardcode a
-# per-deployment IP -- they use {{ registry_endpoint }}.
-# Runs on the primary control-plane only.
+# Render templated k8s manifests with discovered endpoints, create configmaps
+# from files, and apply. registry_endpoint and nfs_server_ip are discovered from
+# inventory so manifests never hardcode per-deployment IPs. Primary CP only.
 # ============================================================================
 - name: "Identify the primary control-plane node"
   ansible.builtin.set_fact:
-    _is_primary: "{{ inventory_hostname == (groups['k8s_control_plane'] | sort | first) }}"
+    _is_primary: "{{ inventory_hostname == (groups[control_plane_group] | sort | first) }}"
 
-- name: "Discover the registry endpoint from inventory"
+- name: "Discover registry endpoint and nfs server IP from inventory"
   ansible.builtin.set_fact:
     registry_endpoint: >-
-      {{ (groups[registry_group] | default([])
-          | map('extract', hostvars, 'ansible_host')
+      {{ (groups[registry_group] | default([]) | map('extract', hostvars, 'ansible_host')
           | select('defined') | first) ~ ':' ~ registry_port }}
+    nfs_server_ip: >-
+      {{ groups[control_plane_group] | default([]) | map('extract', hostvars, 'ansible_host')
+         | select('defined') | first }}
   when: _is_primary | bool
 
-- name: "Fail clearly if no registry found"
-  ansible.builtin.assert:
-    that: "groups[registry_group] | default([]) | length > 0"
-    fail_msg: "No registry host in inventory group '{{ registry_group }}'."
-    quiet: true
-  when: _is_primary | bool
-
-- name: "Ensure render directory exists"
+- name: "Ensure render dir exists"
   ansible.builtin.file:
     path: "{{ manifest_render_dir }}"
     state: directory
     mode: '0755'
   when: _is_primary | bool
 
+# ---- ConfigMaps from files (for single-file mounts via subPath) ----
+- name: "Create configmaps from files"
+  kubernetes.core.k8s:
+    state: present
+    kubeconfig: "/home/{{ remote_cloud_user }}/.kube/config"
+    definition:
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: "{{ item.name }}"
+      data: "{{ { (item.file | basename): lookup('file', item.file) } }}"
+  vars:
+    ansible_python_interpreter: "{{ k8s_python_interpreter }}"
+  loop: "{{ configmap_files }}"
+  loop_control: { label: "{{ item.name }}" }
+  when: _is_primary | bool and (configmap_files | length > 0)
+
+# ---- Render + apply templated manifests ----
 - name: "Find manifest templates"
   ansible.builtin.find:
     paths: "{{ manifest_src_dir }}"
@@ -40,7 +51,7 @@
   register: _manifests
   when: _is_primary | bool
 
-- name: "Render each manifest with the discovered registry endpoint"
+- name: "Render each manifest with discovered endpoints"
   ansible.builtin.template:
     src: "{{ item.path }}"
     dest: "{{ manifest_render_dir }}/{{ item.path | basename | regex_replace('\\.j2$', '') }}"
@@ -49,7 +60,7 @@
   loop_control: { label: "{{ item.path | basename }}" }
   when: _is_primary | bool
 
-- name: "Apply the rendered manifests to the cluster"
+- name: "Apply rendered manifests"
   kubernetes.core.k8s:
     state: present
     src: "{{ manifest_render_dir }}/{{ item.path | basename | regex_replace('\\.j2$', '') }}"

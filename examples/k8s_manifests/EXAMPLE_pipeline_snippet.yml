@@ -1,0 +1,20 @@
+# ===========================================================================
+# EXAMPLE pipeline for the app-storage + deployment chain. Add as a sibling
+# pipeline (or include). ORDER MATTERS: volume -> nfs -> storage -> workloads.
+# Assumes the cluster (k8s_cluster) and registry are already up.
+# ===========================================================================
+  app_deploy:
+    # 1. second volume on the master (NEW -> case a: create+partition+format)
+    - { step: volume_provision, target: "local", requires: [volume_size_gb] }
+    - { step: volume_mount, target: "role:k8s_control_plane", gather_facts: true,
+        requires: [volume_mount_name, volume_size_gb] }
+    # 2. NFS: server on master, clients on workers
+    - { step: nfs_server, target: "role:k8s_control_plane",
+        requires: [nfs_export_base, nfs_volumes] }
+    - { step: nfs_client, target: "role:k8s_worker" }
+    # 3. k8s storage: generate + apply PV/PVC from nfs_volumes
+    - { step: k8s_nfs_storage, target: "role:k8s_control_plane", gather_facts: true,
+        requires: [nfs_export_base, nfs_volumes] }
+    # 4. workloads: configmaps + templated deployments/services
+    - { step: k8s_apply_manifests, target: "role:k8s_control_plane", gather_facts: true,
+        requires: [manifest_src_dir] }

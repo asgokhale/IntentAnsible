@@ -1,0 +1,8 @@
+---
+# Install NFS client packages so kubelet can mount NFS PVs for pods on this node.
+- name: "Install NFS client packages"
+  ansible.builtin.apt:
+    name: "{{ nfs_client_packages }}"
+    state: present
+    update_cache: true
+  become: true

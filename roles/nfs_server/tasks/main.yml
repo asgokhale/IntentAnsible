@@ -1,0 +1,46 @@
+---
+# ============================================================================
+# Set up an NFS server on this node (the k8s master) exporting the mounted app
+# volume, so worker pods can mount NFS-backed PVs. Creates the per-volume
+# subdirectories (from nfs_volumes) so each PV path exists before pods claim it.
+# ============================================================================
+- name: "Require nfs_export_base and nfs_volumes"
+  ansible.builtin.assert:
+    that:
+      - "nfs_export_base is defined and nfs_export_base | string | length > 0"
+      - "nfs_volumes is defined and nfs_volumes | length > 0"
+    fail_msg: "nfs_server needs nfs_export_base and a non-empty nfs_volumes list."
+    quiet: true
+
+- name: "Install NFS server packages"
+  ansible.builtin.apt:
+    name: "{{ nfs_server_packages }}"
+    state: present
+    update_cache: true
+  become: true
+
+- name: "Ensure each volume's export subdirectory exists"
+  ansible.builtin.file:
+    path: "{{ nfs_export_base }}/{{ item.subpath }}"
+    state: directory
+    mode: '0777'
+  loop: "{{ nfs_volumes }}"
+  loop_control: { label: "{{ item.subpath }}" }
+  become: true
+
+- name: "Write /etc/exports (export the base to the allowed network)"
+  ansible.builtin.copy:
+    dest: /etc/exports
+    content: "{{ nfs_export_base }} {{ nfs_export_cidr }}({{ nfs_export_options }})\n"
+    mode: '0644'
+  become: true
+  notify:
+    - reload nfs exports
+    - restart nfs server
+
+- name: "Ensure NFS server is running"
+  ansible.builtin.systemd:
+    name: nfs-kernel-server
+    state: started
+    enabled: true
+  become: true

@@ -1,0 +1,46 @@
+---
+# ============================================================================
+# Generate static NFS PV+PVC pairs from nfs_volumes and apply them. NFS server
+# IP is discovered from the control-plane group. Primary control-plane only.
+# ============================================================================
+- name: "Require nfs_export_base and nfs_volumes"
+  ansible.builtin.assert:
+    that:
+      - "nfs_export_base is defined and nfs_export_base | string | length > 0"
+      - "nfs_volumes is defined and nfs_volumes | length > 0"
+    fail_msg: "k8s_nfs_storage needs nfs_export_base and a non-empty nfs_volumes list."
+    quiet: true
+
+- name: "Identify the primary control-plane node"
+  ansible.builtin.set_fact:
+    _is_primary: "{{ inventory_hostname == (groups[control_plane_group] | sort | first) }}"
+
+- name: "Discover the NFS server IP (the master running nfs_server)"
+  ansible.builtin.set_fact:
+    nfs_server_ip: >-
+      {{ groups[control_plane_group] | default([])
+         | map('extract', hostvars, 'ansible_host') | select('defined') | first }}
+  when: _is_primary | bool
+
+- name: "Ensure render dir exists"
+  ansible.builtin.file:
+    path: "{{ manifest_render_dir }}"
+    state: directory
+    mode: '0755'
+  when: _is_primary | bool
+
+- name: "Render PV+PVC manifest from nfs_volumes"
+  ansible.builtin.template:
+    src: pv_pvc.yaml.j2
+    dest: "{{ manifest_render_dir }}/nfs_pv_pvc.yaml"
+    mode: '0644'
+  when: _is_primary | bool
+
+- name: "Apply PV+PVC to the cluster"
+  kubernetes.core.k8s:
+    state: present
+    src: "{{ manifest_render_dir }}/nfs_pv_pvc.yaml"
+    kubeconfig: "/home/{{ remote_cloud_user }}/.kube/config"
+  vars:
+    ansible_python_interpreter: "{{ k8s_python_interpreter }}"
+  when: _is_primary | bool

@@ -1,0 +1,6 @@
+---
+# nfs_client -- install the NFS client bits on worker nodes so kubelet can mount
+# NFS-backed persistent volumes. (kubelet does the actual mounts for pods; this
+# just ensures the nfs client packages are present.)
+nfs_client_packages:
+  - nfs-common

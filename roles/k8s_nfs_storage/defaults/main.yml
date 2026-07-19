@@ -1,0 +1,16 @@
+---
+# k8s_nfs_storage -- generate and apply static NFS PVs + PVCs from the nfs_volumes
+# list. The NFS server IP is DISCOVERED from the k8s_control_plane group (the
+# master that runs nfs_server), so PVs never hardcode a per-deployment IP.
+# Runs on the primary control-plane.
+#
+# USER supplies (vars):
+#   nfs_export_base : e.g. /mnt/touchstone  (PV path = base/subpath)
+#   nfs_volumes     : [ { name, subpath, size }, ... ]
+# Optional:
+storage_class_name: "nfs-touchstone"
+nfs_access_mode: "ReadWriteMany"
+nfs_reclaim_policy: "Retain"
+control_plane_group: k8s_control_plane
+k8s_python_interpreter: "{{ venv_dir }}/bin/python"
+manifest_render_dir: "/home/{{ remote_cloud_user }}/rendered_manifests"

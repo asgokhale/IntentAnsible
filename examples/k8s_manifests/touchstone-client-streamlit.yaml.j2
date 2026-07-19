@@ -1,0 +1,58 @@
+# Google AI helped convert the docker compose to this YAML, which 
+# we have further modified as deemed fit.
+
+# ==============================================================================
+# 3. CLIENT-STREAMLIT Deployment
+# ==============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: client-streamlit
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: client-streamlit
+  template:
+    metadata:
+      labels:
+        app: client-streamlit
+    spec:
+      restartPolicy: Always  # always restart on failure
+      containers:
+        - name: streamlit
+          image: {{ registry_endpoint }}/touchstone/src-client-streamlit:latest
+          imagePullPolicy: Always
+          command: ["streamlit"]
+          args: ["run", "touchstone_client.py"]
+          resources:
+            requests:
+              memory: "2Gi"     # Assures the pod only schedules on a node with 2GB free
+              cpu: "1"          # Claims 1 of your 2 available vCPUs
+            limits:
+              memory: "3276Mi"  # HARD CEILING: Leaving ~600MB completely safe for
+                                # the KVM OS (needs integer and so converted to Mi)
+              cpu: "2"          # Allows bursting to use both vCPUs
+          ports:
+            - containerPort: 8501
+          env:
+            - name: TOUCHSTONE_HOST
+              value: "server-flask-core" # Connects to the server-flask-core K8s Service
+            - name: TOUCHSTONE_PORT
+              value: "5001"
+          volumeMounts:
+            - name: users-volume
+              mountPath: /app/users
+        # Note: Handled metric_definitions.json configuration using config map
+            - name: metrics-volume
+              mountPath: /server/core/metric_definitions.json
+              subPath: metric_definitions.json
+              readOnly: true
+      volumes:
+        - name: users-volume
+          persistentVolumeClaim:
+            claimName: touchstone-users-pvc
+        # Use config map for the metrics json file
+        - name: metrics-volume
+          configMap:
+            name : metric-definitions-config

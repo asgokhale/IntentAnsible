@@ -1,0 +1,17 @@
+---
+# nfs_server -- export the mounted app volume from the master so worker pods can
+# access it as NFS-backed persistent volumes.
+#
+# USER supplies (vars):
+#   nfs_export_base : path of the mounted volume to export, e.g. /mnt/touchstone
+#   nfs_volumes     : list of { name, subpath, size } -- the export dir tree is
+#                     created from the subpaths so each PV's path exists.
+# Optional:
+#   nfs_export_cidr    : network allowed to mount (default: discovered pod/cluster net)
+#   nfs_export_options : /etc/exports options (NFS perms are finicky; override if needed)
+nfs_export_options: "rw,sync,no_subtree_check,no_root_squash"
+# Who may mount. Default to a broad private range covering the cluster; override
+# with your actual cluster CIDR for tighter security.
+nfs_export_cidr: "*"
+nfs_server_packages:
+  - nfs-kernel-server
