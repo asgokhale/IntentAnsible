@@ -1,11 +1,33 @@
 ---
 # ============================================================================
 # Start the private Docker registry (stock registry:latest) on the
-# docker_registry node. Uses the docker_container module (idempotent: brings the
-# container to the desired running state; restarts on boot via restart_policy).
-# Target this at role:docker_registry only.
+# docker_registry node, IDEMPOTENTLY.
+#
+# We first REMOVE any existing container of the same name, then start a fresh
+# one. Why remove-then-start rather than just state:started?
+#   1. It frees port 5000 if an old registry (e.g. auto-restarted from a previous
+#      setup) is holding it.
+#   2. It ensures the new container runs under the CURRENT docker data-root. A
+#      container created before a data-root change keeps using the old storage;
+#      recreating it makes the registry store on the (volume-backed) data-root.
+#
+# The removal is scoped to OUR container name only ({{ registry_container_name }}),
+# so it never touches other containers on the node.
+#
+# NOTE on pushed-image persistence: this assumes a from-scratch setup where the
+# registry stores under the (now volume-backed) data-root. If you are MIGRATING
+# an existing registry's images onto a new volume, that data copy is a manual,
+# deliberate step (stop docker; rsync -aP old-data-root/ new-mount/; start) --
+# we intentionally do NOT auto-copy image data, as mishandling overlay2
+# permissions can corrupt the store.
 # ============================================================================
-- name: "Start the private registry container"
+- name: "Remove any existing registry container of the same name (frees port, clears old storage binding)"
+  community.docker.docker_container:
+    name: "{{ registry_container_name }}"
+    state: absent
+  become: true
+
+- name: "Start a fresh private registry container"
   community.docker.docker_container:
     name: "{{ registry_container_name }}"
     image: "{{ registry_image }}"
