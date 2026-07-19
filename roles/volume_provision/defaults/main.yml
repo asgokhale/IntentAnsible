@@ -2,6 +2,8 @@
 # Volume provisioning (create + attach). NEUTRAL role name; the provider-specific
 # implementation is dispatched by platform.name (mirrors node_provision).
 # USER supplies (in vars): volume_size_gb, and optionally volume_type / name.
+# Set volume_name to an EXISTING volume's name to REUSE it (state: present is
+# name-idempotent -- it won't recreate). e.g. volume_name: DockerImages1
 volume_name: "{{ (platform.cloud | default('vol')) ~ '-registry-vol' }}"
 volume_type: "ceph-hdd"           # Chameleon KVM: ceph-hdd or ceph-ssd
 # volume_size_gb: 200             # REQUIRED from user (no sensible default)

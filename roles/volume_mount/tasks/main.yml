@@ -1,14 +1,22 @@
 ---
 # ============================================================================
-# Safely turn an attached raw volume into a mounted filesystem and (optionally)
-# move docker's storage onto it. DESTRUCTIVE operations (partition/format) are
-# guarded: we only touch a device that is the expected SIZE and has NO existing
-# partitions/filesystem, unless volume_force=true.
+# Attach-aware, idempotent volume setup. Handles THREE cases automatically and
+# does only what's missing, printing a PLAN before any destructive action:
+#   (a) raw new device            -> partition -> format -> mount
+#   (b) reused device, still raw  -> partition -> format -> mount
+#   (c) device already set up     -> MOUNT ONLY (never partition/format)
+#
+# SAFETY: partition/format happen ONLY on a device confirmed genuinely raw (no
+# partitions AND no filesystem signature). ANY existing partition or filesystem
+# => case (c), mount only, data preserved. volume_force=true overrides.
+#
+# This role assumes the volume is already attached (see volume_provision). It
+# identifies the attached volume device whether or not it has partitions.
 # ============================================================================
 - name: "Require volume_mount_name and volume_size_gb"
   ansible.builtin.assert:
     that:
-      - "volume_mount_name is defined and volume_mount_name | length > 0"
+      - "volume_mount_name is defined and volume_mount_name | string | length > 0"
       - "volume_size_gb is defined and volume_size_gb | int > 0"
     fail_msg: "volume_mount needs volume_mount_name and volume_size_gb."
     quiet: true
@@ -17,73 +25,83 @@
   ansible.builtin.setup:
     gather_subset: ['hardware']
 
-# ROBUST device identification (no user-specified device, no fragile string match):
-# The attached volume is the block device that is (a) a whole disk, (b) has NO
-# partitions, and (c) is NOT the root/boot disk. We then VERIFY its size is in
-# the right ballpark (loose, GB-vs-GiB agnostic) as a safety confirmation before
-# doing anything destructive. This handles Chameleon reporting "200GiB" etc.
-- name: "Find the root device (so we never touch it)"
+- name: "Find the root device (never touch it)"
   ansible.builtin.shell:
     cmd: "findmnt -no SOURCE / | sed 's/[0-9]*$//; s#/dev/##'"
   register: _rootdev
   changed_when: false
 
-- name: "Identify unpartitioned, non-root disks"
-  # Only REAL attached disks are candidates. We explicitly exclude virtual /
-  # pseudo block devices that also appear in ansible_devices but are never an
-  # attached volume: loop* (snap mounts), ram*, dm-* (device-mapper), sr* (cdrom),
-  # fd* (floppy). Attached cloud volumes are vd* (virtio), sd* (scsi/sata),
-  # xvd* (xen), or nvme* -- we keep only those.
+# Identify the attached volume: a REAL disk (vd/sd/xvd/nvme, not loop/ram/dm/sr),
+# NOT the root disk, of roughly the expected size. NOTE: unlike before, we do NOT
+# require it to be unpartitioned -- a reused, already-formatted volume (case c)
+# HAS partitions and must still be found so we can mount it.
+- name: "Identify candidate volume device(s) by type + size (partitioned or not)"
   ansible.builtin.set_fact:
     _vol_candidates: >-
       {{ ansible_devices | dict2items
-         | selectattr('value.partitions', 'equalto', {})
          | rejectattr('key', 'equalto', _rootdev.stdout | trim)
          | selectattr('value.removable', 'equalto', '0')
          | selectattr('key', 'match', '^(vd|sd|xvd|nvme)')
+         | selectattr('value.sectors', 'defined')
+         | selectattr('value.sectorsize', 'defined')
          | map(attribute='key') | list }}
 
-- name: "Show detected candidate device(s)"
-  ansible.builtin.debug:
-    msg: >-
-      Root disk: {{ _rootdev.stdout | trim }}. Candidate volume device(s)
-      (unpartitioned, non-root): {{ _vol_candidates }}
+- name: "Keep only candidates whose size is in the expected ballpark (GB/GiB agnostic)"
+  ansible.builtin.set_fact:
+    _vol_sized: >-
+      {%- set out = [] -%}
+      {%- for d in _vol_candidates -%}
+        {%- set gb = ((ansible_devices[d].sectors | int) * (ansible_devices[d].sectorsize | int) / 1000000000) | round(0,'floor') | int -%}
+        {%- if gb >= (volume_size_gb | int * 0.8) and gb <= (volume_size_gb | int * 1.2) -%}
+          {%- set _ = out.append(d) -%}
+        {%- endif -%}
+      {%- endfor -%}
+      {{ out }}
 
-- name: "Fail if not exactly one candidate (refuse to guess on a destructive op)"
+- name: "Require exactly one size-matched candidate device"
   ansible.builtin.assert:
-    that: "_vol_candidates | length == 1"
+    that: "_vol_sized | length == 1"
     fail_msg: >-
-      Expected exactly ONE unpartitioned non-root disk (the attached volume) but
-      found: {{ _vol_candidates }}. Refusing to partition/format to avoid
-      destroying the wrong disk. If a previous run already formatted the volume,
-      it now HAS a partition and is correctly excluded -- meaning there's nothing
-      to do. To override, set volume_force=true and volume_device explicitly.
+      Expected exactly ONE attached ~{{ volume_size_gb }}GB volume device
+      (non-root, real disk) but found: {{ _vol_sized }} (all size-matched
+      candidates). If empty, the volume may not be attached (check
+      volume_provision / openstack volume list). If more than one, set
+      volume_device explicitly with volume_force=true.
     quiet: true
   when: not (volume_force | bool)
 
 - name: "Set the target device"
   ansible.builtin.set_fact:
-    _dev: "/dev/{{ volume_device | default(_vol_candidates[0]) }}"
+    _dev_name: "{{ volume_device | default(_vol_sized[0]) }}"
+    _dev: "/dev/{{ volume_device | default(_vol_sized[0]) }}"
 
-- name: "Safety: verify the device size is in the expected ballpark"
-  # Loose check (GB vs GiB agnostic): guest-reported size should be within 20%
-  # of the requested size. Guards against accidentally grabbing a small disk.
-  ansible.builtin.assert:
-    that:
-      - "(_dev_gb | int) >= (volume_size_gb | int * 0.8)"
-      - "(_dev_gb | int) <= (volume_size_gb | int * 1.2)"
-    fail_msg: >-
-      Device {{ _dev }} reports ~{{ _dev_gb }}GB but you expected
-      ~{{ volume_size_gb }}GB. Refusing (wrong device?). Set volume_force=true to
-      override.
-    quiet: true
-  vars:
-    _dev_gb: "{{ ((ansible_devices[volume_device | default(_vol_candidates[0])].sectors | int)
-                  * (ansible_devices[volume_device | default(_vol_candidates[0])].sectorsize | int)
-                  / 1000000000) | round(0, 'floor') | int }}"
-  when: not (volume_force | bool)
+# Decide the CASE: is this device already set up (has partitions), or raw?
+- name: "Determine whether the device is already partitioned"
+  ansible.builtin.set_fact:
+    _has_partitions: "{{ (ansible_devices[_dev_name].partitions | default({})) | length > 0 }}"
 
-- name: "Create a GPT partition spanning the whole device (idempotent)"
+- name: "Check for an existing filesystem signature on the device or its first partition"
+  ansible.builtin.command:
+    cmd: "blkid -p -o value -s TYPE {{ _dev }}{{ '1' if _has_partitions else '' }}"
+  register: _blkid
+  failed_when: false
+  changed_when: false
+  become: true
+
+- name: "Classify: already-set-up (case c) vs raw (case a/b)"
+  ansible.builtin.set_fact:
+    _already_setup: "{{ _has_partitions or (_blkid.stdout | default('') | trim | length > 0) }}"
+
+- name: "PLAN: what this run will do"
+  ansible.builtin.debug:
+    msg: >-
+      Device {{ _dev }} ({{ ((ansible_devices[_dev_name].sectors|int)*(ansible_devices[_dev_name].sectorsize|int)/1000000000)|round(0,'floor')|int }}GB).
+      {{ 'ALREADY SET UP (has partition/filesystem) -> will MOUNT ONLY, no partition/format (case c).'
+         if _already_setup
+         else 'RAW -> will PARTITION + FORMAT + MOUNT (case a/b).' }}
+
+# ---- Destructive steps: ONLY on a genuinely raw device (or forced) ----
+- name: "Create a GPT partition (only if raw)"
   community.general.parted:
     device: "{{ _dev }}"
     number: 1
@@ -92,13 +110,23 @@
     part_start: 0%
     part_end: 100%
   become: true
+  when: (not _already_setup) or (volume_force | bool)
 
-- name: "Format the partition (only creates fs if not already present)"
+- name: "Format the new partition (only if raw)"
   community.general.filesystem:
     fstype: "{{ volume_fstype }}"
     dev: "{{ _dev }}1"
-    # force is false by default -> will NOT reformat an existing filesystem
+    # force stays false: never reformat an existing filesystem
   become: true
+  when: (not _already_setup) or (volume_force | bool)
+
+# ---- Mount (all cases converge here) ----
+- name: "Determine the partition to mount"
+  # Both raw (just created vdX1) and already-set-up (existing vdX1) mount the
+  # first partition. If a case-c volume was formatted whole-disk (no partition),
+  # fall back to the whole device.
+  ansible.builtin.set_fact:
+    _mount_src: "{{ _dev ~ '1' if (_has_partitions or not _already_setup) else _dev }}"
 
 - name: "Ensure the mount point exists"
   ansible.builtin.file:
@@ -110,15 +138,14 @@
 - name: "Mount the volume and persist in /etc/fstab"
   ansible.posix.mount:
     path: "{{ volume_mount_base }}/{{ volume_mount_name }}"
-    src: "{{ _dev }}1"
+    src: "{{ _mount_src }}"
     fstype: "{{ volume_fstype }}"
     opts: defaults
     state: mounted
   become: true
 
-- name: "Report the mounted volume path"
+- name: "Report the mounted volume"
   ansible.builtin.debug:
     msg: >-
-      Volume mounted at {{ volume_mount_base }}/{{ volume_mount_name }}.
-      To put docker's storage here, run docker_config with a settings var like
-      {'data-root': '{{ volume_mount_base }}/{{ volume_mount_name }}'}.
+      Mounted {{ _mount_src }} at {{ volume_mount_base }}/{{ volume_mount_name }}
+      ({{ 'existing data preserved' if _already_setup else 'freshly formatted' }}).
