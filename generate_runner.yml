@@ -104,6 +104,16 @@
           {{ _all_steps | map(attribute='_id') | list }}
         quiet: true
 
+    - name: "Fail if the selected pipeline expanded to zero steps"
+      ansible.builtin.assert:
+        that: "_steps | length > 0"
+        fail_msg: >-
+          Pipeline '{{ active_pipeline }}' expanded to 0 steps. It is empty or
+          composed only of empty includes. Define its steps (or its includes)
+          before running. If you meant to compose phases, list them under
+          '{{ active_pipeline }}:' as '- {{ '{' }} include: <phase> {{ '}' }}'.
+        quiet: true
+        
     - name: "List steps and exit (list_steps=true)"
       when: list_steps | default(false) | bool
       block:

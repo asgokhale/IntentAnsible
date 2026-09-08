@@ -1,0 +1,5 @@
+---
+# Where node_provision writes the generated inventory. Defaults to a per-
+# deployment path; override with -e inventory_out_dir=... if you want a custom
+# location. Mirrors the defaulting pattern already used by k8s_join_capture.
+inventory_out_dir: "inv/{{ deployment_name | default('default') }}"
