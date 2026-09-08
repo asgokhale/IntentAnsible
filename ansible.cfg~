@@ -1,0 +1,16 @@
+# Framework-owned Ansible configuration. Selected explicitly by deploy.sh via
+# ANSIBLE_CONFIG so the user's ~/.ansible.cfg is bypassed entirely -- the
+# framework is self-contained and cannot be sabotaged by stale personal config.
+# Users who need to override may set framework_ansible_cfg_extra (see deploy.sh).
+[defaults]
+host_key_checking = False          # never consult known_hosts (closes AutomationNeeds #1)
+forks = 10                         # tune for your bastion capacity
+interpreter_python = auto_silent   # suppress the interpreter-discovery warnings
+retry_files_enabled = False
+
+[ssh_connection]
+# Bypass the user's known_hosts and SSH config on EVERY ssh Ansible spawns,
+# including the outer connection (the inventory already does this for the
+# ProxyCommand inner hop). This makes stale bastion host keys impossible to hit.
+ssh_args = -F /dev/null -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null
+pipelining = true                  # fewer ssh ops per task; recovers speed

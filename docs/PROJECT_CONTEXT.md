@@ -232,3 +232,12 @@ with TAO/D&C specifics (service names, MPC/build details, actual .cdp XML).
 Worked example = highest ROI, zero cluster time.
 
 TODO: AG fills the intent->.cdp worked example (2 components, 1 connection).
+
+## Added support to override default ansible.cfg that was causing issues
+
+Framework now ships its own ansible.cfg, selected via ANSIBLE_CONFIG in
+deploy.sh, bypassing ~/.ansible.cfg. Disables host_key_checking and known_hosts
+consultation — structurally closes AutomationNeeds #1 (stale bastion host
+key). User override via ANSIBLE_CONFIG_OVERRIDE env var. Root cause of the
+multi-turn connection saga was a stale known_hosts entry after bastion
+recreation, not ControlMaster. 

@@ -28,6 +28,13 @@
 # =============================================================================
 set -euo pipefail
 
+# Use the framework's own ansible.cfg, bypassing the user's ~/.ansible.cfg
+# entirely (self-contained: not sabotaged by stale personal SSH/ansible config).
+# ANSIBLE_CONFIG wins over ./ansible.cfg, ~/.ansible.cfg, and /etc/ansible.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+export ANSIBLE_CONFIG="${ANSIBLE_CONFIG_OVERRIDE:-$SCRIPT_DIR/ansible.cfg}"
+echo "[deploy] using ANSIBLE_CONFIG=$ANSIBLE_CONFIG"
+
 DEPLOY_DIR=""
 PASSTHRU=()
 
