@@ -21,7 +21,7 @@ all:
     ansible_user: {{ deploy_conn.remote_user }}
 {% set nocfg = '-F /dev/null ' %}
 {% set shk = '' if deploy_conn.strict_host_key_checking | default(false) else '-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ' %}
-{% set mux = '-o ControlMaster=auto -o ControlPersist=120s -o ServerAliveInterval=15 -o ServerAliveCountInterval=3 ' %}
+{% set mux = '' %}
 {% set proxy = '-o ProxyCommand="ssh -W %h:%p -i ' ~ deploy_conn.bastion.key ~ ' ' ~ nocfg ~ shk ~ mux ~ deploy_conn.bastion.user ~ '@' ~ deploy_conn.bastion.host ~ '"' %}
   children:
 {% for grp in (groups.keys() | reject('in', ['all','ungrouped','all_provisioned']) | sort) %}
