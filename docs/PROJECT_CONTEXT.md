@@ -131,3 +131,104 @@ oracle when we get to them.
 - configmap (metric-definitions-config) is created before manifests are applied,
   so the streamlit subPath mount has it in time — as long as
   metric_definitions.json exists where configmap_files points.
+
+## PAPER — Middleware 2026 Industry Track
+
+### Meta
+- Venue: ACM Middleware 2026, Industry Track (6 pages; refs + Limitations
+  likely excluded — VERIFY on official CFP when posted; some length details
+  came from cross-venue snippets, not confirmed Middleware CFP).
+- Repo cited in paper: https://github.com/asgokhale/IntentAnsible
+  (private now; public at submission; anonymized for review).
+- LaTeX skeleton lives at: paper.tex (acmart sigconf, anonymous+review).
+  Numbers are \newcommand placeholders at top of that file — fill once.
+
+### Framing (decided)
+- Blend of systems/design + experience report, weighted toward design.
+- Predominantly quantitative results, some qualitative.
+
+### Thesis (verbatim)
+The high-value role of generative AI in operations is not to regenerate the
+substrate but to capture operator intent and compile it into faithful,
+deterministic orchestration of the existing, unmodified substrate — with
+generation confined to design time and kept off the production path.
+
+### Named contribution (approved)
+An intent-compilation layer that re-expresses operator intent as deterministic
+orchestration over unmodified, community-maintained middleware, keeping
+generative AI at design time and off the production path.
+
+### Three pillars
+1. Investment preservation — middleware/OS is decades of hardened community
+   investment; won't/shouldn't be regenerated. Framework adds ZERO lines to it.
+2. Intent over generation — spec+pipeline+vars compiles deterministically; human
+   states WHAT, fixed engine handles HOW (mechanism-vs-data split is the spine).
+3. LLM judiciously, design-time not run-time — authoring cost amortizes over
+   unlimited deterministic re-runs; runtime path has ZERO inference.
+
+### Argument cautions (for review survival)
+- Cost claim must be framed as "zero runtime inference / one-time authoring
+  amortized," NOT "LLMs are cheap." Lead with determinism + reproducibility;
+  cost follows.
+- Do NOT claim the framework makes Kubernetes faster. Contribution is the
+  intent-compilation layer + its guarantees. Metrics point at expressiveness
+  and determinism, not substrate performance.
+- Be candid on CNI maturity (flannel verified; canal/calico/cilium in progress).
+  Candor strengthens an industry paper.
+
+### Section map (see paper.tex for full scaffold)
+1 Intro · 2 Motivation (uses AutomationNeeds.txt as field evidence) ·
+3 Background (old monolith) · 4 Design (mechanism/data split, roles-list,
+pipeline-as-data, self-contained conn, LLM-at-design-time + Fig 1) ·
+5 Experience+Results (Tables 1–3) · 6 Related Work · 7 Conclusion · Limitations.
+
+### Results tables — data to gather
+- Table 1 (migration/expressiveness): old master+tasks/ LOC; engine mechanism
+  LOC; # distinct deployments expressible from one engine (pangea, 4-VM
+  zero-master, bare-metal, …); manual steps per redeploy old→new (→0).
+  NOTE: Tables 1 & 2 counts are extractable from the codebase dumps already
+  shared — can be computed before the NFS run finishes.
+- Table 2 (determinism/LLM): runtime LLM invocations = 0; # roles ported at
+  design time; runtime = 2 ansible-playbook calls; re-run VM duplication = 0.
+- Table 3 (Chameleon bring-up, pangea): wall-clock per phase; flannel verified;
+  NFS/touchstone row comes from the CURRENT test run — capture timestamps.
+
+### Related work to position against
+IaC/GitOps (Terraform, Helm, Ansible, Kustomize) — declarative but
+human-owned, no intent-compilation, no preservation stance. LLM code-gen
+(Claude Code, Copilot) — generate artifacts humans then own/debug. We sit
+between: deterministic like IaC, intent-capturing like LLM tools, neither
+regenerating substrate nor putting inference on the hot path.
+
+### Open paper TODOs
+- [ ] Compute Table 1 & 2 counts from the dumps.
+- [ ] Capture Table 3 wall-clock + NFS/touchstone result from current run.
+- [ ] Verify Middleware 2026 industry CFP: page accounting + Limitations rule.
+- [ ] Draft Figure 1 (design-time-dashed vs. runtime-solid).
+- [ ] Write abstract last.
+
+## PAPER — Generality section (TAO/CIAO)
+
+Scope decided: DESIGN-LEVEL gesture only, "doable + how," ~1 page. NOT a
+verified second system. Goal: defuse "is this just Kubernetes?".
+
+Three-tier claim (honest, decreasing verification / increasing reach):
+1. Verified: K8s on Chameleon (primary evidence).
+2. Transfers unchanged to TAO: build-as-role, topology+ordered service
+   bring-up (provision_order for Naming Svc / DAnCE ExecMgr+NodeManagers),
+   investment-preservation applies even more forcefully.
+3. Domain-specific extension for CIAO component assembly: our SAME compilation
+   pattern one layer up — intent -> generates a D&C .cdp plan -> hands off to
+   UNMODIFIED DAnCE (do NOT replace D&C; emit its native artifact, exactly as
+   pipeline -> run_deployment.yml -> unmodified Ansible).
+
+Key honesty boundaries (keep in paper): bring-up not runtime lifecycle;
+not claiming general/validated .cdp generation — one small correct
+source->sink connection shown end-to-end as existence-of-path.
+
+Section lives in paper.tex as \section{Generality Beyond Kubernetes} with
+Fig (intent sketch -> .cdp fragment). Slots marked <slot:...> for AG to fill
+with TAO/D&C specifics (service names, MPC/build details, actual .cdp XML).
+Worked example = highest ROI, zero cluster time.
+
+TODO: AG fills the intent->.cdp worked example (2 components, 1 connection).
