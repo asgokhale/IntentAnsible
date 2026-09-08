@@ -6,6 +6,11 @@
 # key. Ansible never consults ~/.ssh/config.
 #   - the BASTION connects directly on its public/floating IP (no proxy).
 #   - every other host jumps THROUGH the bastion via ProxyCommand.
+#
+# Hosts are emitted per role group, but ONLY those that are actual provisioned
+# nodes (members of all_provisioned). This keys off the data invariant rather
+# than group-name patterns, so any role name works and the control node
+# (localhost) is never written.
 all:
   vars:
     ansible_user: {{ deploy_conn.remote_user }}
@@ -14,10 +19,11 @@ all:
 {% set proxy = '-o ProxyCommand="ssh -W %h:%p -i ' ~ deploy_conn.bastion.key ~ ' ' ~ nocfg ~ shk ~ deploy_conn.bastion.user ~ '@' ~ deploy_conn.bastion.host ~ '"' %}
   children:
 {% for grp in (groups.keys() | reject('in', ['all','ungrouped','all_provisioned']) | sort) %}
-{% if groups[grp] | length > 0 %}
+{% set members = groups[grp] | select('in', groups['all_provisioned']) | sort %}
+{% if members | length > 0 %}
     {{ grp }}:
       hosts:
-{% for h in groups[grp] | sort %}
+{% for h in members %}
 {% set is_bastion = h in (groups['bastion'] | default([])) %}
         {{ h }}:
 {% if is_bastion %}
