@@ -3,6 +3,7 @@ run_deployment.yml
 *.retry
 inv/*/hosts.yml
 *.log
+*~
 
 # Your real inventories with captured IPs (optional: keep private)
 inv/
