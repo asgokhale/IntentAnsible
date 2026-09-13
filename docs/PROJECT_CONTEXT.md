@@ -241,3 +241,22 @@ consultation — structurally closes AutomationNeeds #1 (stale bastion host
 key). User override via ANSIBLE_CONFIG_OVERRIDE env var. Root cause of the
 multi-turn connection saga was a stale known_hosts entry after bastion
 recreation, not ControlMaster. 
+
+## RESOLVED + VALIDATED: containerd root relocation for build-heavy nodes
+- CORRECTION to earlier note: overlayfs storage driver does NOT mean
+  data-root relocation suffices. Modern Docker's default builder (BuildKit)
+  stores build layers under CONTAINERD's root (/var/lib/containerd),
+  regardless of docker's Storage Driver. So build-heavy nodes need BOTH
+  docker data-root AND containerd root relocated onto the volume.
+- Fix: cri_config gained optional containerd_root_path (relocates containerd
+  `root` in config.toml after regeneration). Set per-node via pipeline vars.
+- Validated on PG-NODE1: docker compose build drove /mnt/dockervol/containerd
+  to 3G+ while root disk stayed flat at 9.1G. Confirmed working.
+- Also fixed: cri_config restarts containerd, which left docker inactive on
+  docker nodes -> added docker-restart-if-present (guarded by dockerd binary
+  presence) so docker comes back automatically. k8s-only nodes skip it.
+- Paper lesson: relocating container storage requires moving every storage
+  sink, and which sinks exist depends on the builder -- BuildKit uses
+  containerd's store even when the reported storage driver is overlayfs.
+  
+  
