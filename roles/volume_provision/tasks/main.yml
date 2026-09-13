@@ -1,7 +1,7 @@
 ---
 # ============================================================================
-# volume_provision -- create a persistent volume and attach it to the registry
-# node. NEUTRAL name: the intent is "get me a volume attached to my registry".
+# volume_provision -- create a persistent volume and attach it to the target
+# node. NEUTRAL name: the intent is "get me a volume attached to my target node".
 # The concrete mechanics live in a per-platform task file, dispatched below by
 # platform.name -- exactly like node_provision. Today only 'chameleon'
 # (OpenStack) is implemented; adding a provider = add tasks/<provider>.yml and

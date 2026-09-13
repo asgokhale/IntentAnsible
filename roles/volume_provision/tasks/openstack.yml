@@ -16,12 +16,12 @@
   delegate_to: localhost
   run_once: true
 
-- name: "Resolve the registry server name to attach to"
+- name: "Resolve the target server name to attach to"
   ansible.builtin.set_fact:
     _registry_server: "{{ (groups[volume_attach_group] | sort | first) }}"
   run_once: true
 
-- name: "Attach the volume to the registry node"
+- name: "Attach the volume to the target node"
   openstack.cloud.server_volume:
     cloud: "{{ platform.cloud }}"
     state: present
