@@ -16,6 +16,15 @@
 # Restart is via a handler (fires once, only if something changed).
 # ============================================================================
 
+- name: "Detect whether docker is installed on this node"
+  ansible.builtin.stat:
+    path: /usr/bin/dockerd
+  register: _dockerd_bin
+
+- name: "Set docker-present fact"
+  ansible.builtin.set_fact:
+    _docker_present: "{{ _dockerd_bin.stat.exists }}"
+
 - name: "Generate a fresh default containerd config (CRI-enabled)"
   # ALWAYS regenerate: the shipped /etc/containerd/config.toml often has CRI
   # disabled or is not k8s-ready, which causes kubeadm's
@@ -25,7 +34,9 @@
   ansible.builtin.shell:
     cmd: "containerd config default > {{ cri_config_path }}"
   become: true
-  notify: restart containerd
+  notify:
+    - restart containerd
+    - restart docker if present
 
 - name: "Ensure containerd uses the systemd cgroup driver"
   ansible.builtin.replace:
@@ -34,7 +45,45 @@
     replace: 'SystemdCgroup = true'
   become: true
   when: cri_cgroup_systemd | bool
-  notify: restart containerd
+  notify:
+    - restart containerd
+    - restart docker if present
+
+# ---- Relocate containerd root onto a volume (optional) ----
+# BuildKit (default for `docker compose build` / `docker build` on modern
+# Docker) stores build layers under containerd's root, NOT docker's data-root,
+# regardless of docker's storage driver. So a node doing builds needs its
+# containerd root on the volume too. Guarded: only fires when the var is set.
+- name: "Relocate containerd root: replace existing root line"
+  ansible.builtin.replace:
+    path: "{{ cri_config_path }}"
+    regexp: '^root\s*=.*$'
+    replace: 'root = "{{ containerd_root_path }}"'
+  become: true
+  register: _cri_root_replaced
+  when: containerd_root_path is defined
+  notify:
+    - restart containerd
+    - restart docker if present
+
+- name: "Relocate containerd root: insert at top if config had no root line"
+  ansible.builtin.lineinfile:
+    path: "{{ cri_config_path }}"
+    line: 'root = "{{ containerd_root_path }}"'
+    insertbefore: BOF
+  become: true
+  when: containerd_root_path is defined and (_cri_root_replaced is not changed)
+  notify:
+    - restart containerd
+    - restart docker if present
+
+- name: "Ensure containerd root directory exists"
+  ansible.builtin.file:
+    path: "{{ containerd_root_path }}"
+    state: directory
+    mode: '0711'
+  become: true
+  when: containerd_root_path is defined
 
 - name: "Point containerd registry config_path at certs.d (single path, no docker certs.d)"
   # The legacy default sometimes generates a DUAL path
@@ -45,7 +94,9 @@
     regexp: "config_path\\s*=\\s*'/etc/containerd/certs.d:/etc/docker/certs.d'"
     replace: "config_path = '{{ cri_registry_config_path }}'"
   become: true
-  notify: restart containerd
+  notify:
+    - restart containerd
+    - restart docker if present
 
 - name: "Ensure config_path is set even if it was empty ('')"
   # Fallback for containerd versions that emit config_path = '' in the registry
@@ -57,7 +108,9 @@
     regexp: "config_path\\s*=\\s*''"
     replace: "config_path = '{{ cri_registry_config_path }}'"
   become: true
-  notify: restart containerd
+  notify:
+    - restart containerd
+    - restart docker if present
 
 - name: "Ensure the certs.d directory exists"
   ansible.builtin.file:

@@ -7,3 +7,11 @@
     daemon_reload: true
     state: restarted
   become: true
+
+- name: restart docker if present
+  ansible.builtin.systemd:
+    name: docker
+    state: restarted
+    daemon_reload: true
+  become: true
+  when: _docker_present | default(false) | bool
