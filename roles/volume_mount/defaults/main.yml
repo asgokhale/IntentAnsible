@@ -10,6 +10,9 @@
 #   volume_fstype     : filesystem (default ext4)
 #   volume_force      : allow (re)partitioning a NON-empty device (default false -- DANGER)
 #   volume_device     : explicit device name (only with volume_force; normally auto-detected)
+#   volume_mount_owner : chown the mount point to this user after mounting (e.g. cc).
+#                        Leave UNSET for root-owned mounts (e.g. docker data-root).
+#   volume_mount_group : group for the chown (defaults to volume_mount_owner).
 volume_fstype: ext4
 volume_force: false
 volume_mount_base: /mnt

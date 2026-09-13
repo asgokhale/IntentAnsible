@@ -144,6 +144,15 @@
     state: mounted
   become: true
 
+- name: "Set ownership on the mount point (optional)"
+  ansible.builtin.file:
+    path: "{{ volume_mount_base }}/{{ volume_mount_name }}"
+    owner: "{{ volume_mount_owner }}"
+    group: "{{ volume_mount_group | default(volume_mount_owner) }}"
+    state: directory
+  become: true
+  when: volume_mount_owner is defined
+  
 - name: "Report the mounted volume"
   ansible.builtin.debug:
     msg: >-
