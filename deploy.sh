@@ -98,7 +98,17 @@ fi
 
 ALL_ARGS=("${DEPLOY_ARGS[@]}" "${PASSTHRU[@]}")
 
+rm -f run_deployment.yml   # never run a stale runner
 echo "[deploy] generating runner..."
 ansible-playbook "${ALL_ARGS[@]}" generate_runner.yml
+
+# If this was a dry-run listing, generation intentionally did NOT regenerate
+# run_deployment.yml (it end_play'd early). Running it now would execute a STALE
+# runner from a previous deploy. So stop here.
+if printf '%s\0' "${ALL_ARGS[@]}" | grep -qz 'list_steps=true'; then
+  echo "[deploy] list_steps set -- steps listed above, nothing executed."
+  exit 0
+fi
+
 echo "[deploy] running generated pipeline..."
 ansible-playbook "${ALL_ARGS[@]}" run_deployment.yml
