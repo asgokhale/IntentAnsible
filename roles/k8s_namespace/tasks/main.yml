@@ -1,0 +1,13 @@
+# roles/k8s_namespace/tasks/main.yml
+---
+- name: "Ensure namespace exists"
+  kubernetes.core.k8s:
+    state: present
+    api_version: v1
+    kind: Namespace
+    name: "{{ k8s_namespace }}"
+    kubeconfig: "/home/{{ remote_cloud_user }}/.kube/config"
+  vars:
+    ansible_python_interpreter: "{{ k8s_python_interpreter }}"
+  run_once: true
+  

@@ -30,11 +30,13 @@
   kubernetes.core.k8s:
     state: present
     kubeconfig: "/home/{{ remote_cloud_user }}/.kube/config"
+    namespace: "{{ k8s_namespace }}"   
     definition:
       apiVersion: v1
       kind: ConfigMap
       metadata:
         name: "{{ item.name }}"
+        namespace: "{{ k8s_namespace }}"  # <-- (belt-and-suspenders)
       data: "{{ { (item.file | basename): lookup('file', item.file) } }}"
   vars:
     ansible_python_interpreter: "{{ k8s_python_interpreter }}"
@@ -63,6 +65,7 @@
 - name: "Apply rendered manifests"
   kubernetes.core.k8s:
     state: present
+    namespace: "{{ k8s_namespace }}"   # force all applied resources into this ns
     src: "{{ manifest_render_dir }}/{{ item.path | basename | regex_replace('\\.j2$', '') }}"
     kubeconfig: "/home/{{ remote_cloud_user }}/.kube/config"
   vars:

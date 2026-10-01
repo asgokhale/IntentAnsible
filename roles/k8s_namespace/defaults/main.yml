@@ -1,0 +1,4 @@
+---
+# Python interpreter with the kubernetes client libs (the venv), needed by
+# the kubernetes.core.k8s module.
+k8s_python_interpreter: "{{ venv_dir }}/bin/python"
