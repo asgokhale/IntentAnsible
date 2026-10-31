@@ -21,7 +21,7 @@ spec:
       restartPolicy: Always  # always restart on failure
       containers:
         - name: flask-core
-          image: {{ registry_endpoint }}/touchstone/src-server-flask-core:latest
+          image: {{ registry_endpoint }}/myapp/src-server-flask-core:latest
           imagePullPolicy: Always
           command: ["flask"]
           args: ["--app", "flask/server.py", "run", "--host=0.0.0.0", "--port=5001"]
@@ -39,13 +39,13 @@ spec:
 #        securityContext:
 #          runAsUser: 0 # Matches user: "root" from Docker Compose
           env:
-            - name: TOUCHSTONE_DEPLOYMENT
+            - name: APP_DEPLOYMENT
               value: "k8s"
-            - name: TOUCHSTONE_WORKER_POOLSIZE
+            - name: APP_WORKER_POOLSIZE
               value: "1"
-            - name: TOUCHSTONE_SERVICE_HOST
+            - name: APP_SERVICE_HOST
               value: "cloud-worker" # Connects directly to the cloud-worker K8s Service
-            - name: TOUCHSTONE_SERVICE_PORT
+            - name: APP_SERVICE_PORT
               value: "5555"
           volumeMounts:
             - name: db-volume
@@ -55,7 +55,7 @@ spec:
       volumes:
         - name: db-volume
           persistentVolumeClaim:
-            claimName: touchstone-db-pvc
+            claimName: myapp-db-pvc
         - name: users-volume
           persistentVolumeClaim:
-            claimName: touchstone-users-pvc
+            claimName: myapp-users-pvc

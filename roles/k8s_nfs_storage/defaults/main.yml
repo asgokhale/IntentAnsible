@@ -5,10 +5,10 @@
 # Runs on the primary control-plane.
 #
 # USER supplies (vars):
-#   nfs_export_base : e.g. /mnt/touchstone  (PV path = base/subpath)
+#   nfs_export_base : e.g. /mnt/myapp  (PV path = base/subpath)
 #   nfs_volumes     : [ { name, subpath, size }, ... ]
 # Optional:
-storage_class_name: "nfs-touchstone"
+storage_class_name: "nfs-myapp"
 nfs_access_mode: "ReadWriteMany"
 nfs_reclaim_policy: "Retain"
 control_plane_group: k8s_control_plane

@@ -23,7 +23,7 @@ spec:
       restartPolicy: Always  # always restart on failure
       containers:
         - name: cloud-worker
-          image: {{ registry_endpoint }}/touchstone/src-cloud-worker:latest # Point to your built Docker image
+          image: {{ registry_endpoint }}/myapp/src-cloud-worker:latest # Point to your built Docker image
           imagePullPolicy: Always
           command: ["python"]
           args: ["core/cloudworker.py"]
@@ -53,9 +53,9 @@ spec:
           env:
             - name: PYTHONPATH  # was needed for finding the package
               value: "/"
-            - name: TOUCHSTONE_DEPLOYMENT  # not sure if needed for worker
+            - name: APP_DEPLOYMENT  # not sure if needed for worker
               value: "k8s"
-            - name: TOUCHSTONE_WORKER_POOLSIZE  # likewise, not sure needed here
+            - name: APP_WORKER_POOLSIZE  # likewise, not sure needed here
               value: "1"
           volumeMounts:
             - name: db-volume
@@ -65,7 +65,7 @@ spec:
       volumes:
         - name: db-volume
           persistentVolumeClaim:
-            claimName: touchstone-db-pvc
+            claimName: myapp-db-pvc
         - name: users-volume
           persistentVolumeClaim:
-            claimName: touchstone-users-pvc
+            claimName: myapp-users-pvc

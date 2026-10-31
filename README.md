@@ -543,12 +543,12 @@ This is usually WELCOME (you recover your registry and images without
 rebuilding). But note:
 
 - An old registry container may auto-start and claim the registry port under its
-  ORIGINAL name (e.g. `PangeaRegistry`), even though you never supplied that name
+  ORIGINAL name (e.g. `MyRegistry`), even though you never supplied that name
   this time -- it came from the volume's metadata.
 - `registry_start` (remove-then-recreate by name) will then collide on the port
   unless you tell it the real name. Set:
 
-      registry_container_name: PangeaRegistry   # match the resurrected container
+      registry_container_name: MyRegistry   # match the resurrected container
 
   Or remove the old container once (`docker rm -f <name>`) and let the framework
   create its default (`private_registry`).
@@ -560,11 +560,11 @@ Steps that only touch daemon.json (`docker_data_root`, `registry_docker_trust`,
 ## Deploying workloads with templated manifests (`k8s_apply_manifests`)
 
 Workload manifests often hardcode the registry IP in image lines
-(`192.168.3.46:5000/touchstone/...`). Since the registry IP changes per
+(`192.168.3.46:5000/myapp/...`). Since the registry IP changes per
 deployment, templatize it: rename the manifest to `*.yaml.j2` and replace the IP
 with `{{ registry_endpoint }}`:
 
-    image: {{ registry_endpoint }}/touchstone/src-server-flask-core:latest
+    image: {{ registry_endpoint }}/myapp/src-server-flask-core:latest
 
 `k8s_apply_manifests` discovers the registry endpoint from the `docker_registry`
 inventory group (same as registry_docker_trust), renders every `*.yaml.j2` in
@@ -572,7 +572,7 @@ your manifest dir, and applies them to the cluster (on the primary control-plane
 using the venv python that has the kubernetes lib).
 
     # vars:
-    manifest_src_dir: mydeployments/pangea/manifests   # your *.yaml.j2 files
+    manifest_src_dir: mydeployments/myapp/manifests   # your *.yaml.j2 files
 
     # pipeline (after the cluster + registry are up):
     - { step: k8s_apply_manifests, target: "role:k8s_control_plane",
@@ -599,13 +599,13 @@ Roles:
   *.yaml.j2 with discovered registry_endpoint + nfs_server_ip, applies them.
 
 User contract (see examples/k8s_manifests/EXAMPLE_vars.yml):
-- nfs_export_base (e.g. /mnt/touchstone), nfs_volumes [{name,subpath,size}...],
+- nfs_export_base (e.g. /mnt/myapp), nfs_volumes [{name,subpath,size}...],
   manifest_src_dir, optional configmap_files [{name,file}...].
 - The SECOND app-data volume (on the master) is separate from the docker volume;
   provision/mount it with volume_provision + volume_mount targeting the master.
 
 In your manifests, replace hardcoded IPs: registry -> {{ registry_endpoint }},
-nfs/master -> {{ nfs_server_ip }}. Templated examples of the touchstone
+nfs/master -> {{ nfs_server_ip }}. Templated examples of the myapp
 deployments/services live in examples/k8s_manifests/.
 
 CONSISTENCY the framework can't check: nfs_volumes subpaths, the PVC names your

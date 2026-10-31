@@ -6,17 +6,17 @@
 
 # --- the app data volume (SECOND volume, on the master; separate from docker) ---
 # provisioned/mounted by volume_provision + volume_mount targeting the master
-volume_name: TouchstoneData          # a NEW volume (case a: create+partition+format)
+volume_name: MyAppData          # a NEW volume (case a: create+partition+format)
 volume_size_gb: 300
-volume_mount_name: touchstone         # -> /mnt/touchstone on the master
+volume_mount_name: myapp         # -> /mnt/appdata on the master
 
 # --- NFS export + k8s storage ---
-nfs_export_base: /mnt/touchstone      # the mounted volume path on master
+nfs_export_base: /mnt/appdata      # the mounted volume path on master
 nfs_volumes:
-  - { name: touchstone-db,    subpath: server/flask/database, size: 150Gi }
-  - { name: touchstone-users, subpath: server/core/users,     size: 150Gi }
+  - { name: myapp-db,    subpath: server/flask/database, size: 150Gi }
+  - { name: myapp-users, subpath: server/core/users,     size: 150Gi }
 
 # --- workload manifests + configmaps ---
-manifest_src_dir: mydeployments/pangea/manifests   # your *.yaml.j2 files
+manifest_src_dir: mydeployments/example/manifests   # your *.yaml.j2 files
 configmap_files:
-  - { name: metric-definitions-config, file: mydeployments/pangea/files/metric_definitions.json }
+  - { name: metric-definitions-config, file: mydeployments/example/files/metric_definitions.json }

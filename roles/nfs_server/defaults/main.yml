@@ -3,7 +3,7 @@
 # access it as NFS-backed persistent volumes.
 #
 # USER supplies (vars):
-#   nfs_export_base : path of the mounted volume to export, e.g. /mnt/touchstone
+#   nfs_export_base : path of the mounted volume to export, e.g. /mnt/myapp
 #   nfs_volumes     : list of { name, subpath, size } -- the export dir tree is
 #                     created from the subpaths so each PV's path exists.
 # Optional:

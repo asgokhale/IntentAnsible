@@ -21,10 +21,10 @@ spec:
       restartPolicy: Always  # always restart on failure
       containers:
         - name: streamlit
-          image: {{ registry_endpoint }}/touchstone/src-client-streamlit:latest
+          image: {{ registry_endpoint }}/myapp/src-client-streamlit:latest
           imagePullPolicy: Always
           command: ["streamlit"]
-          args: ["run", "touchstone_client.py"]
+          args: ["run", "myapp_client.py"]
           resources:
             requests:
               memory: "2Gi"     # Assures the pod only schedules on a node with 2GB free
@@ -36,9 +36,9 @@ spec:
           ports:
             - containerPort: 8501
           env:
-            - name: TOUCHSTONE_HOST
+            - name: APP_HOST
               value: "server-flask-core" # Connects to the server-flask-core K8s Service
-            - name: TOUCHSTONE_PORT
+            - name: APP_PORT
               value: "5001"
           volumeMounts:
             - name: users-volume
@@ -51,7 +51,7 @@ spec:
       volumes:
         - name: users-volume
           persistentVolumeClaim:
-            claimName: touchstone-users-pvc
+            claimName: myapp-users-pvc
         # Use config map for the metrics json file
         - name: metrics-volume
           configMap:
